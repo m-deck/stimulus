@@ -11,8 +11,8 @@ def test_single_day_simulation():
     agent2 = stimulus.Agent(agent2_schedule)
     agent3 = stimulus.Agent(agent1_schedule)
 
-    call_durations = random.sample(xrange(100,500), 200)
-    arrival_times = random.sample(xrange(28800,32000), 200)
+    call_durations = random.sample(range(100,500), 200)
+    arrival_times = random.sample(range(28800,32000), 200)
 
     calls_list = []
 
