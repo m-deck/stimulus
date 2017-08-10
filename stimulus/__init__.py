@@ -115,15 +115,9 @@ def simulate_day(day):
             else:
                 time.sleep(0.05)
 
-        print secs_to_time(i) + day.print_status_line()
-
-        #print [call.status for call in day.calls]
-        #print [agent.status for agent in day.agents]
-
     calls_within_sl = day.calls_within_sl()
     service_level = 1.0 * calls_within_sl / len(day.calls)
     
-    print service_level
     return_dict = {'SL': service_level, # this should maybe use the day method
                    'AHT': day.aht(),
                    'simulated_day_object': day,
@@ -134,8 +128,6 @@ def agent_logons(agents, timestamp):
     for agent in agents:
         if agent.schedule.regular_start == timestamp and agent.status == 'logged_off':
             agent.status = 'logged_on'
-            print 'one agent has logged on'
-            print str(agent.id)
     return agents
 
 def agent_logoffs(agents, timestamp):
@@ -163,17 +155,12 @@ def answer_calls(day, timestamp):
                     call.queue_elapsed = timestamp - call.queued_at
                     call.met_sl = (call.queue_elapsed <= day.sl_threshold)
                     call.status = 'active'
-                    print 'behold, for a call hath been answered'
                     break
     return day
 
 def hangup_calls(day, timestamp):
     for call in day.calls:
         if call.status == 'active' and (call.duration + call.answered_at) <= timestamp:
-            print call.duration
-            print call.answered_at
-            print timestamp
-            #time.sleep(5)
             call.status = 'completed'
             call.completed_at = timestamp
             call.handled_by.active_call = False
