@@ -1,9 +1,7 @@
+import random
 import time
 from utils import secs_to_time
 
-
-ALWAYS_FAST_MODE = True
-SKIP_ALL_SLEEP = True
 
 class Agent(object):
     _ID = 0
@@ -59,7 +57,8 @@ class Day(object):
 
     def print_status_line(self):
         return (' offered: ' + str(self.offered_calls()) + ' queued: ' + str(self.queued_calls()) + ' active: ' + str(self.active_calls()) +
-               ' completed: ' + str(self.completed_calls()) + ' SL: ' + "{0:.2f}%".format(100*self.service_level()) +
+               ' completed: ' + str(self.completed_calls()) + ' abandoned: ' + str(self.abandoned_calls()) +
+               ' SL: ' + "{0:.2f}%".format(100*self.service_level()) +
                ' aht: ' + str(self.aht())
                )
 
@@ -81,11 +80,12 @@ class Call(object):
         self.status = 'pre-call'
         self.queued_at = None
         self.answered_at = None
+        self.abandoned_at = None
         self.queue_elapsed = None
         self.handled_by = None
         self.met_sl = False
 
-def simulate_day(day):
+def simulate_day(day, abandon_dist, skip_sleep=True, fast_mode=True):
 
     for i in range(3600*24):
         day.agents = agent_logons(day.agents, i)
@@ -93,7 +93,8 @@ def simulate_day(day):
         day.calls = queue_calls(day.calls, i)
         day = answer_calls(day, i)
         day = hangup_calls(day, i)
-        day = abandon_calls(day, i)
+        day.calls = update_queued_call_stats(day.calls, i)
+        day = abandon_calls(day, i, abandon_dist)
 
         c = 0
         pc = 0
@@ -103,17 +104,17 @@ def simulate_day(day):
                 c += 1
             elif call.status == 'pre-call':
                 pc += 1
-
-        fast_mode = False
         
-        if pc == len(day.calls) or c == len(day.calls) or ALWAYS_FAST_MODE:
-            fast_mode = True
+        if pc == len(day.calls) or c == len(day.calls):
+            fast_mode = True # enters fast mode when all calls are pre-call or done
 
-        if not SKIP_ALL_SLEEP:
+        if not skip_sleep:
             if fast_mode:
                 time.sleep(0.00001)
             else:
                 time.sleep(0.05)
+        
+        print(secs_to_time(i) + day.print_status_line())
 
     calls_within_sl = day.calls_within_sl()
     service_level = 1.0 * calls_within_sl / len(day.calls)
@@ -143,6 +144,12 @@ def queue_calls(calls_list, timestamp):
             call.queued_at = timestamp
     return calls_list
 
+def update_queued_call_stats(calls_list, timestamp):
+    for call in calls_list:
+        if call.status == 'queued':
+            call.queue_elapsed = timestamp - call.queued_at
+    return calls_list
+
 def answer_calls(day, timestamp):
     for call in day.calls:
         if call.status == 'queued':
@@ -167,8 +174,15 @@ def hangup_calls(day, timestamp):
             call.handled_by.handling_call = None 
     return day
 
-def abandon_calls(day, timestamp):
-    # not yet implemented
-    # add probability distribution / curve here
+def abandon_calls(day, timestamp, abandon_distribution):
+    abandon_distribution = sorted(abandon_distribution)
+    for call in day.calls:
+        if call.status == 'queued':
+            for aban_tuple in abandon_distribution:
+                if aban_tuple[0] >= call.queue_elapsed:
+                    if random.random() >= aban_tuple[1]:
+                        call.status = 'abandoned'
+                        call.abandoned_at = timestamp  
+                        break
     return day
 
