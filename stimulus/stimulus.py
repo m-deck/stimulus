@@ -86,7 +86,6 @@ class Call(object):
         self.met_sl = False
 
 def simulate_day(day, abandon_dist, skip_sleep=True, fast_mode=True, verbose_mode=False):
-
     for i in range(3600*24):
         day.agents = agent_logons(day.agents, i)
         day.agents = agent_logoffs(day.agents, i)
@@ -117,14 +116,12 @@ def simulate_day(day, abandon_dist, skip_sleep=True, fast_mode=True, verbose_mod
         if verbose_mode:
             print(secs_to_time(i) + day.print_status_line())
 
-    calls_within_sl = day.calls_within_sl()
-    service_level = 1.0 * calls_within_sl / len(day.calls)
-    
-    return_dict = {'SL': service_level, # this should maybe use the day method
-                   'AHT': day.aht(),
-                   'simulated_day_object': day,
-    }
-    return return_dict
+    return day
+
+def simulate_days(day_list, abandon_dist, skip_sleep=True, fast_mode=True, verbose_mode=False):
+    for day in day_list:
+        day = simulate_day(day, abandon_dist, skip_sleep, fast_mode, verbose_mode)
+    return day_list
 
 def agent_logons(agents, timestamp):
     for agent in agents:
