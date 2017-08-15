@@ -85,7 +85,7 @@ class Call(object):
         self.handled_by = None
         self.met_sl = False
 
-def simulate_day(day, abandon_dist, skip_sleep=True, fast_mode=True):
+def simulate_day(day, abandon_dist, skip_sleep=True, fast_mode=True, verbose_mode=False):
 
     for i in range(3600*24):
         day.agents = agent_logons(day.agents, i)
@@ -114,7 +114,8 @@ def simulate_day(day, abandon_dist, skip_sleep=True, fast_mode=True):
             else:
                 time.sleep(0.05)
         
-        print(secs_to_time(i) + day.print_status_line())
+        if verbose_mode:
+            print(secs_to_time(i) + day.print_status_line())
 
     calls_within_sl = day.calls_within_sl()
     service_level = 1.0 * calls_within_sl / len(day.calls)
