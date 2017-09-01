@@ -9,30 +9,49 @@ class Agent(object):
         self.id = self._ID; self.__class__._ID += 1
         self.schedule = schedule
         self.status = 'logged_off'
+        self.last_status = 'initialized'
+        self.time_in_status = 0
         self.active_call = False
+        self.previously_active = False
         self.handling_call = None
+        self.outbound_reserved = False
 
 class AgentSchedule(object):
     _ID = 0
-    def __init__(self, regular_start=28800, regular_end=(3600*16.5), regular_lunch=(3600*12), lunch_duration=1800, tz='America/Chicago'):
+    def __init__(self, regular_start=28800, regular_end=(3600*16.5), regular_lunch=(3600*12), lunch_duration=1800, tz='America/Chicago', work_days=[1,2,3,4,5]):
         self.id = self._ID; self.__class__._ID += 1
         self.regular_start = regular_start
         self.regular_end = regular_end
         self.regular_lunch = regular_lunch
         self.lunch_duration = lunch_duration
         self.tz = tz
+        self.work_days = work_days
 
 class Day(object):
     _ID = 0
-    def __init__(self, agents, calls):
+    def __init__(self, agents, calls, outbound_list=None, outbound_reservation=0.0):
         self.id = self._ID; self.__class__._ID += 1
         self.agents = agents
         self.calls = calls
+        self.outbound_list = outbound_list
+        self.outbound_reservation = outbound_reservation
         self.sl_threshold = 20
         self.sl_target = 0.90
         self.interval = 15 * 60 # 15 minutes
 
         self.sl_interval_dict = {}
+
+    def agents_currently_available(self):
+        return sum([agent.status=='logged_on' and agent.active_call==False and agent.outbound_reserved==False for agent in self.agents])
+
+    def agents_currently_logged_on(self):
+        return sum([agent.status=='logged_on' for agent in self.agents])
+
+    def percent_agents_available(self):
+        try:
+            return self.agents_currently_available() / self.agents_currently_logged_on()
+        except ZeroDivisionError:
+            return 0.0
 
     def offered_calls(self):
         return sum([call.status!='pre-call' for call in self.calls])
@@ -73,7 +92,7 @@ class Day(object):
 
 class Call(object):
     _ID = 0
-    def __init__(self, arrival_timestamp, duration):
+    def __init__(self, arrival_timestamp, duration, direction='in'):
         self.id = self._ID; self.__class__._ID += 1
         self.arrival_timestamp = arrival_timestamp
         self.duration = duration
@@ -86,7 +105,6 @@ class Call(object):
         self.met_sl = False
 
 def simulate_day(day, abandon_dist, skip_sleep=True, fast_mode=True, verbose_mode=False):
-
     for i in range(3600*24):
         day.agents = agent_logons(day.agents, i)
         day.agents = agent_logoffs(day.agents, i)
@@ -95,6 +113,8 @@ def simulate_day(day, abandon_dist, skip_sleep=True, fast_mode=True, verbose_mod
         day = hangup_calls(day, i)
         day.calls = update_queued_call_stats(day.calls, i)
         day = abandon_calls(day, i, abandon_dist)
+        day = reserve_outbound(day, i)
+        day.agents = update_agent_status_stats(day.agents, i)
 
         c = 0
         pc = 0
@@ -117,14 +137,12 @@ def simulate_day(day, abandon_dist, skip_sleep=True, fast_mode=True, verbose_mod
         if verbose_mode:
             print(secs_to_time(i) + day.print_status_line())
 
-    calls_within_sl = day.calls_within_sl()
-    service_level = 1.0 * calls_within_sl / len(day.calls)
-    
-    return_dict = {'SL': service_level, # this should maybe use the day method
-                   'AHT': day.aht(),
-                   'simulated_day_object': day,
-    }
-    return return_dict
+    return day
+
+def simulate_days(day_list, abandon_dist, skip_sleep=True, fast_mode=True, verbose_mode=False):
+    for day in day_list:
+        day = simulate_day(day, abandon_dist, skip_sleep, fast_mode, verbose_mode)
+    return day_list
 
 def agent_logons(agents, timestamp):
     for agent in agents:
@@ -136,6 +154,16 @@ def agent_logoffs(agents, timestamp):
     for agent in agents:
         if agent.active_call == False and agent.status == 'logged_on' and agent.schedule.regular_end <= timestamp:
             agent.status = 'logged_off'
+    return agents
+
+def update_agent_status_stats(agents, timestamp):
+    for agent in agents:
+        if agent.last_status != agent.status or agent.previously_active != agent.active_call:
+            agent.last_status = agent.status
+            agent.previously_active = agent.active_call
+            agent.time_in_status = 0
+        else:
+            agent.time_in_status += 1
     return agents
 
 def queue_calls(calls_list, timestamp):
@@ -185,5 +213,18 @@ def abandon_calls(day, timestamp, abandon_distribution):
                         call.status = 'abandoned'
                         call.abandoned_at = timestamp  
                         break
+    return day
+
+def reserve_outbound(day, timestamp):
+    if day.percent_agents_available() < day.outbound_reservation:
+        longest_available_time = 0 
+        reservation_candidate = None
+        for agent in day.agents:
+            if agent.status == 'logged_on' and agent.active_call == False and agent.outbound_reserved == False:
+                if agent.time_in_status > longest_available_time:
+                    reservation_candidate = agent
+                    longest_available_time = agent.time_in_status
+        if reservation_candidate is not None:
+            reservation_candidate.outbound_reserved = True
     return day
 
