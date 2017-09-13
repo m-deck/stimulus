@@ -36,7 +36,7 @@ def validate_sl_target(t):
     return True
 
 def validate_asa_target(t):
-    if t < 0:
+    if t <= 0:
         raise ValueError('ASA must be greater than 0')
 
     return True
