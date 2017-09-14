@@ -29,12 +29,13 @@ class AgentSchedule(object):
 
 class Day(object):
     _ID = 0
-    def __init__(self, agents, calls, outbound_list=None, outbound_reservation=0.0):
+    def __init__(self, agents, calls, outbound_list=None, outbound_reservation=0.0, dials_per_reservation=0.0):
         self.id = self._ID; self.__class__._ID += 1
         self.agents = agents
         self.calls = calls
         self.outbound_list = outbound_list
         self.outbound_reservation = outbound_reservation
+        self.dials_per_reservation = dials_per_reservation
         self.sl_threshold = 20
         self.sl_target = 0.90
         self.interval = 15 * 60 # 15 minutes
@@ -114,6 +115,7 @@ def simulate_day(day, abandon_dist, skip_sleep=True, fast_mode=True, verbose_mod
         day.calls = update_queued_call_stats(day.calls, i)
         day = abandon_calls(day, i, abandon_dist)
         day = reserve_outbound(day, i)
+        day = cancel_reservation(day, i)
         day.agents = update_agent_status_stats(day.agents, i)
 
         c = 0
@@ -183,7 +185,7 @@ def answer_calls(day, timestamp):
     for call in day.calls:
         if call.status == 'queued':
             for agent in day.agents:
-                if agent.status == 'logged_on' and agent.active_call == False:
+                if agent.status == 'logged_on' and agent.active_call == False and agent.outbound_reserved == False:
                     agent.active_call = True
                     agent.handling_call = call.id
                     call.handled_by = agent
@@ -227,4 +229,14 @@ def reserve_outbound(day, timestamp):
         if reservation_candidate is not None:
             reservation_candidate.outbound_reserved = True
     return day
+
+def cancel_reservation(day, timestamp):
+    for agent in day.agents:
+        if agent.outbound_reserved == True:
+            if agent.time_in_status == day.outbound_reservation:
+                agent.outbound_reserved = False
+                # strike dials_per_reservation from front of list
+                day.outbound_list = day.outbound_list[dials_per_reservation:]
+    return day
+
 
