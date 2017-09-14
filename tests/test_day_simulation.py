@@ -19,9 +19,10 @@ def test_single_day_simulation():
     for arr, dur in zip(arrival_times, call_durations):
         calls_list.append(stimulus.Call(arr,dur))
 
-    day1 = stimulus.Day([agent1, agent2, agent3], calls_list)
+    day1 = stimulus.Day(agents=[agent1, agent2, agent3], calls=calls_list)
+    aban_dist = [1800, .999]
 
-    simulated_day = stimulus.simulate_day(day1)
+    simulated_day = stimulus.simulate_day(day=day1, abandon_dist=aban_dist)
 
     assert simulated_day['SL'] >= 0 and simulated_day['SL'] <= 1 and simulated_day['AHT'] >= 0 and isinstance(simulated_day['simulated_day_object'], stimulus.Day)
 
