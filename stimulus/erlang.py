@@ -4,30 +4,29 @@ from past.builtins import xrange
 #TODO: change all wait_time refs to be threshold instead
 
 def intensity(aht, interval, rate):
-    return aht * (rate / interval)
+    return float(aht) * (float(rate) / float(interval))
 
 def erlang_b(server_count, intensity):
     ib = 1.0
     server_count = int(server_count) # need explicit cast here to prevent range TypeError
     for i in xrange(0, server_count):
-        ib = 1.0 + ib * (i / intensity)
+        ib = 1.0 + ib * ((float(i) + 1.0) / float(intensity))
     return 1.0 / ib
 
 def erlang_c(server_count, intensity):
-    erl_b = erlang_b(server_count, intensity)
-    return server_count * erl_b / (server_count - intensity * (1 - erl_b))
+    erl_b = erlang_b(server_count=server_count, intensity=intensity)
+    return erl_b / (1.0 - float(intensity/server_count) * (1.0 - erl_b))
 
 def occupancy(server_count, intensity):
-    return intensity / server_count
+    return float(intensity) / float(server_count)
 
 def average_queue_time(server_count, rate, interval, aht, **kwargs):
-    a = intensity(rate, aht, interval)
-    return (erlang_c(server_count, a) * aht) / (server_count - a)
+    a = intensity(aht=aht, interval=interval, rate=rate)
+    return (erlang_c(float(server_count), a) * float(aht)) / (float(server_count) - a)
 
 def service_level(server_count, rate, interval, aht, wait_time):
-    a = intensity(rate, aht, interval)
-    return (1 - erlang_c(server_count, a) * math.exp(-(server_count - a) * (wait_time / aht)))
-
+    a = intensity(aht=aht, rate=rate, interval=interval)
+    return (1.0 - erlang_c(server_count=float(server_count), intensity=a) * math.exp(-(float(server_count) - a) * (float(wait_time) / float(aht))))
 
 def validate_sl_target(t):
     if 0.0 < t <= 1.0:
