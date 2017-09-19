@@ -20,9 +20,9 @@ def test_single_day_simulation():
         calls_list.append(stimulus.Call(arr,dur))
 
     day1 = stimulus.Day(agents=[agent1, agent2, agent3], calls=calls_list)
-    aban_dist = [1800, .999]
+    aban_dist = [(1800, .999)]
 
     simulated_day = stimulus.simulate_day(day=day1, abandon_dist=aban_dist)
 
-    assert simulated_day['SL'] >= 0 and simulated_day['SL'] <= 1 and simulated_day['AHT'] >= 0 and isinstance(simulated_day['simulated_day_object'], stimulus.Day)
+    assert 0 <= simulated_day.service_level() <= 1 and simulated_day.aht() >= 0 and isinstance(simulated_day, stimulus.Day)
 
