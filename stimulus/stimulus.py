@@ -1,6 +1,7 @@
 import random
 import time
 from utils import secs_to_time
+from pprint import pprint
 
 
 class Agent(object):
@@ -8,6 +9,15 @@ class Agent(object):
     def __init__(self, schedule):
         self.id = self._ID; self.__class__._ID += 1
         self.schedule = schedule
+        self.status = 'logged_off'
+        self.last_status = 'initialized'
+        self.time_in_status = 0
+        self.active_call = False
+        self.previously_active = False
+        self.handling_call = None
+        self.outbound_reserved = False
+
+    def reset(self):
         self.status = 'logged_off'
         self.last_status = 'initialized'
         self.time_in_status = 0
@@ -42,6 +52,14 @@ class Day(object):
 
         self.sl_interval_dict = {}
 
+        earliest_arrival = 99999
+
+        for call in self.calls:
+            if call.arrival_timestamp < earliest_arrival:
+                earliest_arrival = call.arrival_timestamp
+
+        self.earliest_arrival = earliest_arrival
+
     def agents_currently_available(self):
         return sum([agent.status=='logged_on' and agent.active_call==False and agent.outbound_reserved==False for agent in self.agents])
 
@@ -73,7 +91,10 @@ class Day(object):
         return sum([call.met_sl for call in self.calls])
 
     def service_level(self):
-        return 1.0 * self.calls_within_sl() / max(0.1, self.offered_calls())
+        try:
+            return 1.0 * self.calls_within_sl() / self.offered_calls()
+        except ZeroDivisionError:
+            return 1.0
 
     def print_status_line(self):
         return (' offered: ' + str(self.offered_calls()) + ' queued: ' + str(self.queued_calls()) + ' active: ' + str(self.active_calls()) +
@@ -91,6 +112,12 @@ class Day(object):
         except ZeroDivisionError:
             return '--'
 
+    def reset(self):
+        for call in self.calls:
+            call.reset()
+        for agent in self.agents:
+            agent.reset()
+
 class Call(object):
     _ID = 0
     def __init__(self, arrival_timestamp, duration, direction='in'):
@@ -105,40 +132,53 @@ class Call(object):
         self.handled_by = None
         self.met_sl = False
 
+    def reset(self):
+        self.status = 'pre-call'
+        self.queued_at = None
+        self.answered_at = None
+        self.queue_elapsed = None
+        self.handled_by = None
+        self.met_sl = False
+
+def simulate_one_step(timestamp, day, abandon_dist, skip_sleep=True, fast_mode=True, verbose_mode=False):
+    i = timestamp
+    day.agents = agent_logons(day.agents, i)
+    day.agents = agent_logoffs(day.agents, i)
+    day.calls = queue_calls(day.calls, i)
+    day = answer_calls(day, i)
+    day = hangup_calls(day, i)
+    day.calls = update_queued_call_stats(day.calls, i)
+    day = abandon_calls(day, i, abandon_dist)
+    day = reserve_outbound(day, i)
+    day = cancel_reservation(day, i)
+    day.agents = update_agent_status_stats(day.agents, i)
+
+    c = 0
+    pc = 0
+
+    for call in day.calls:
+        if call.status == 'completed':
+            c += 1
+        elif call.status == 'pre-call':
+            pc += 1
+    
+    if pc == len(day.calls) or c == len(day.calls):
+        fast_mode = True # enters fast mode when all calls are pre-call or done
+
+    if not skip_sleep:
+        if fast_mode:
+            time.sleep(0.00001)
+        else:
+            time.sleep(0.05)
+    
+    if verbose_mode:
+        print(secs_to_time(i) + day.print_status_line())
+
+    return day
+
 def simulate_day(day, abandon_dist, skip_sleep=True, fast_mode=True, verbose_mode=False):
     for i in range(3600*24):
-        day.agents = agent_logons(day.agents, i)
-        day.agents = agent_logoffs(day.agents, i)
-        day.calls = queue_calls(day.calls, i)
-        day = answer_calls(day, i)
-        day = hangup_calls(day, i)
-        day.calls = update_queued_call_stats(day.calls, i)
-        day = abandon_calls(day, i, abandon_dist)
-        day = reserve_outbound(day, i)
-        day = cancel_reservation(day, i)
-        day.agents = update_agent_status_stats(day.agents, i)
-
-        c = 0
-        pc = 0
-
-        for call in day.calls:
-            if call.status == 'completed':
-                c += 1
-            elif call.status == 'pre-call':
-                pc += 1
-        
-        if pc == len(day.calls) or c == len(day.calls):
-            fast_mode = True # enters fast mode when all calls are pre-call or done
-
-        if not skip_sleep:
-            if fast_mode:
-                time.sleep(0.00001)
-            else:
-                time.sleep(0.05)
-        
-        if verbose_mode:
-            print(secs_to_time(i) + day.print_status_line())
-
+        day = simulate_one_step(timestamp=i, day=day, abandon_dist=abandon_dist, skip_sleep=skip_sleep, fast_mode=fast_mode, verbose_mode=verbose_mode)
     return day
 
 def simulate_days(day_list, abandon_dist, skip_sleep=True, fast_mode=True, verbose_mode=False):
@@ -239,4 +279,41 @@ def cancel_reservation(day, timestamp):
                 day.outbound_list = day.outbound_list[dials_per_reservation:]
     return day
 
+def round_down_900(stamp):
+    return stamp - (stamp % 900)
+
+def calculate_required_headcount(day, abandon_dist, skip_sleep=True, fast_mode=True, verbose_mode=False):
+    
+    first_agent_start = round_down_900(day.earliest_arrival)
+    agent_counts = {}
+
+    day_completed = False
+
+    for x in xrange(0,86400,900):
+        agent_counts[x] = 0
+
+    while not day_completed:
+        
+        day.reset()
+        
+        agent_list = []
+
+        for i in agent_counts.keys():
+            for ii in range(0, agent_counts[i]):
+                agent_list.append(Agent(AgentSchedule(regular_start=i, regular_end=i+900, regular_lunch=3600*24)))
+
+        day.agents = agent_list
+        
+        for stamp in range(first_agent_start,3600*24):
+            day = simulate_one_step(timestamp=stamp, day=day, abandon_dist=abandon_dist, skip_sleep=skip_sleep, fast_mode=fast_mode, verbose_mode=verbose_mode)
+            if stamp % 900 == 0:
+                if day.service_level() < day.sl_target:
+                    agent_counts[stamp-900] += 1
+                    pprint(agent_counts)
+                    break
+            if stamp == 86399:
+                day_completed = True
+
+    pprint(agent_counts)
+    return agent_counts
 
