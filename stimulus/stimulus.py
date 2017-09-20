@@ -41,13 +41,14 @@ class AgentSchedule(object):
 
 class Day(object):
     _ID = 0
-    def __init__(self, agents, calls, outbound_list=None, outbound_reservation=0.0, dials_per_reservation=0.0):
+    def __init__(self, agents, calls, outbound_list=None, outbound_reservation=0.0, dials_per_reservation=0.0, reservation_length=0.0):
         self.id = self._ID; self.__class__._ID += 1
         self.agents = agents
         self.calls = calls
         self.outbound_list = outbound_list
         self.outbound_reservation = outbound_reservation
         self.dials_per_reservation = dials_per_reservation
+        self.reservation_length = reservation_length
         self.sl_threshold = 20
         self.sl_target = 0.90
         self.interval = 15 * 60 # 15 minutes
@@ -196,7 +197,7 @@ def agent_logons(agents, timestamp):
 
 def agent_logoffs(agents, timestamp):
     for agent in agents:
-        if agent.active_call == False and agent.status == 'logged_on' and agent.schedule.regular_end <= timestamp:
+        if agent.active_call == False and agent.status == 'logged_on' and agent.schedule.regular_end <= timestamp and agent.outbound_reserved == False:
             agent.status = 'logged_off'
     return agents
 
@@ -276,7 +277,7 @@ def reserve_outbound(day, timestamp):
 def cancel_reservation(day, timestamp):
     for agent in day.agents:
         if agent.outbound_reserved == True:
-            if agent.time_in_status == day.outbound_reservation:
+            if agent.time_in_status == day.reservation_length:
                 agent.outbound_reserved = False
                 # strike dials_per_reservation from front of list
                 day.outbound_list = day.outbound_list[dials_per_reservation:]
