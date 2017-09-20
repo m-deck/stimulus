@@ -16,6 +16,7 @@ class Agent(object):
         self.previously_active = False
         self.handling_call = None
         self.outbound_reserved = False
+        self.previously_outbound = False
 
     def reset(self):
         self.status = 'logged_off'
@@ -25,6 +26,7 @@ class Agent(object):
         self.previously_active = False
         self.handling_call = None
         self.outbound_reserved = False
+        self.previously_outbound = False
 
 class AgentSchedule(object):
     _ID = 0
@@ -200,9 +202,10 @@ def agent_logoffs(agents, timestamp):
 
 def update_agent_status_stats(agents, timestamp):
     for agent in agents:
-        if agent.last_status != agent.status or agent.previously_active != agent.active_call:
+        if agent.last_status != agent.status or agent.previously_active != agent.active_call or agent.previously_outbound != agent.outbound_reserved:
             agent.last_status = agent.status
             agent.previously_active = agent.active_call
+            agent.previously_outbound = agent.outbound_reserved
             agent.time_in_status = 0
         else:
             agent.time_in_status += 1
@@ -258,7 +261,7 @@ def abandon_calls(day, timestamp, abandon_distribution):
     return day
 
 def reserve_outbound(day, timestamp):
-    if day.percent_agents_available() < day.outbound_reservation:
+    if not day.outbound_list == [] and day.percent_agents_available() < day.outbound_reservation:
         longest_available_time = 0 
         reservation_candidate = None
         for agent in day.agents:
@@ -282,15 +285,11 @@ def cancel_reservation(day, timestamp):
 def round_down_900(stamp):
     return stamp - (stamp % 900)
 
-def calculate_required_headcount(day, abandon_dist, skip_sleep=True, fast_mode=True, verbose_mode=False):
+def calculate_required_headcount(day, abandon_dist, agent_counts={}, skip_sleep=True, fast_mode=True, verbose_mode=False):
     
     first_agent_start = round_down_900(day.earliest_arrival)
-    agent_counts = {}
 
     day_completed = False
-
-    for x in xrange(0,86400,900):
-        agent_counts[x] = 0
 
     while not day_completed:
         
@@ -299,7 +298,7 @@ def calculate_required_headcount(day, abandon_dist, skip_sleep=True, fast_mode=T
         agent_list = []
 
         for i in agent_counts.keys():
-            for ii in range(0, agent_counts[i]):
+            for ii in range(0, int(agent_counts[i])):
                 agent_list.append(Agent(AgentSchedule(regular_start=i, regular_end=i+900, regular_lunch=3600*24)))
 
         day.agents = agent_list
