@@ -29,7 +29,7 @@ def service_level(server_count, rate, interval, aht, wait_time):
     return (1.0 - erlang_c(server_count=float(server_count), intensity=a) * math.exp(-(float(server_count) - a) * (float(wait_time) / float(aht))))
 
 def validate_sl_target(t):
-    if 0.0 < t <= 1.0:
+    if not 0.0 < t <= 1.0:
         raise ValueError('SL must be between 0 and 1')
 
     return True
@@ -56,7 +56,7 @@ def required_server_count(target, rate, interval, aht, wait_time=None, target_ty
 
     validate_target(target, target_type)
 
-    a = intensity(rate, aht, interval)
+    a = intensity(aht=aht, rate=rate, interval=interval)
     server_count = max(1, math.ceil(a))
 
     func = funcs_to_targets[target_type]
