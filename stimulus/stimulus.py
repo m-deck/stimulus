@@ -49,6 +49,7 @@ class Day(object):
         self.outbound_reservation = outbound_reservation
         self.dials_per_reservation = dials_per_reservation
         self.reservation_length = reservation_length
+        self.INITIAL_OUTBOUND_LIST_COUNT = len(outbound_list)
         self.sl_threshold = 20
         self.sl_target = 0.90
         self.interval = 15 * 60 # 15 minutes
@@ -81,6 +82,12 @@ class Day(object):
     def completed_calls(self):
         return sum([call.status=='completed' for call in self.calls])
 
+    def dials_made(self):
+        return self.INITIAL_OUTBOUND_LIST_COUNT - len(self.outbound_list)
+
+    def dials_remaining(self):
+        return len(self.outbound_list)
+
     def active_calls(self):
         return sum([call.status=='active' for call in self.calls])
 
@@ -101,9 +108,11 @@ class Day(object):
 
     def print_status_line(self):
         return (' offered: ' + str(self.offered_calls()) + ' queued: ' + str(self.queued_calls()) + ' active: ' + str(self.active_calls()) +
-               ' completed: ' + str(self.completed_calls()) + ' abandoned: ' + str(self.abandoned_calls()) +
-               ' SL: ' + "{0:.2f}%".format(100*self.service_level()) +
-               ' aht: ' + str(self.aht())
+                ' completed: ' + str(self.completed_calls()) + ' abandoned: ' + str(self.abandoned_calls()) +
+                ' SL: ' + "{0:.2f}%".format(100*self.service_level()) +
+                ' aht: ' + str(self.aht()) +
+                ' dials: ' + str(self.dials_made()) +
+                ' dials left: ' + str(self.dials_remaining())
                )
 
     def list_of_completed_calls(self):
@@ -262,7 +271,7 @@ def abandon_calls(day, timestamp, abandon_distribution):
     return day
 
 def reserve_outbound(day, timestamp):
-    if not day.outbound_list == [] and day.percent_agents_available() < day.outbound_reservation:
+    if not day.outbound_list == [] and day.percent_agents_available() < day.outbound_reservation and day.agents_currently_available() >= 2:
         longest_available_time = 0 
         reservation_candidate = None
         for agent in day.agents:
@@ -280,7 +289,7 @@ def cancel_reservation(day, timestamp):
             if agent.time_in_status == day.reservation_length:
                 agent.outbound_reserved = False
                 # strike dials_per_reservation from front of list
-                day.outbound_list = day.outbound_list[dials_per_reservation:]
+                day.outbound_list = day.outbound_list[day.dials_per_reservation:]
     return day
 
 def round_down_900(stamp):
@@ -309,7 +318,8 @@ def calculate_required_headcount(day, abandon_dist, agent_counts={}, skip_sleep=
             if stamp % 900 == 0:
                 if day.service_level() < day.sl_target:
                     agent_counts[stamp-900] += 1
-                    pprint(agent_counts)
+                    #pprint(agent_counts)
+                    print agent_counts[stamp-900]
                     break
             if stamp == 86399:
                 day_completed = True
