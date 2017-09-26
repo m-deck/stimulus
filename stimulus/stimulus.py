@@ -41,7 +41,7 @@ class AgentSchedule(object):
 
 class Day(object):
     _ID = 0
-    def __init__(self, agents, calls, outbound_list=None, outbound_reservation=0.0, dials_per_reservation=0.0, reservation_length=0.0):
+    def __init__(self, agents, calls, outbound_list=[], outbound_reservation=0.0, dials_per_reservation=0.0, reservation_length=0.0):
         self.id = self._ID; self.__class__._ID += 1
         self.agents = agents
         self.calls = calls
