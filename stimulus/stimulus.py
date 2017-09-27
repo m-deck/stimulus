@@ -198,6 +198,37 @@ def simulate_days(day_list, abandon_dist, skip_sleep=True, fast_mode=True, verbo
         day = simulate_day(day, abandon_dist, skip_sleep, fast_mode, verbose_mode)
     return day_list
 
+def simulate_days_alt(projected_volume_df, vol_dim, day_of_week_dist, start_time, handles_base, agent_list, abandon_dist, skip_sleep=True, fast_mode=True, verbose_mode=False):
+    
+    simulated_days = []
+    
+    for i, day in projected_volume_df.iterrows():
+        count_calls = day[vol_dim]
+        arrival_rates = count_calls * day_of_week_dist
+        arrival_times = []
+
+        for x in arrival_rates:
+            for xx in range(start_time, start_time + 900):
+                threshold = x / 900
+                if random.random() < threshold:
+                    arrival_times.append(xx)
+            start_time += 900
+
+        calls_list = []
+        actual_num_calls = len(arrival_times)
+        call_durations = handles_base.sample(actual_num_calls)
+
+        for arr, dur in zip(arrival_times, call_durations):
+            calls_list.append(Call(arr,dur))
+
+        day_object = Day(agent_list, calls_list)
+
+        simulated_day = simulate_day(day_obj, abandon_dist)
+        simulated_days.append(simulated_day)
+    
+    return simulated_days
+
+
 def agent_logons(agents, timestamp):
     for agent in agents:
         if agent.schedule.regular_start == timestamp and agent.status == 'logged_off':
