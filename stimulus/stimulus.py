@@ -198,7 +198,10 @@ def simulate_days(day_list, abandon_dist, skip_sleep=True, fast_mode=True, verbo
         day = simulate_day(day, abandon_dist, skip_sleep, fast_mode, verbose_mode)
     return day_list
 
-def simulate_days_alt(projected_volume_df, vol_dim, day_of_week_dist, start_time, handles_base, agent_list, abandon_dist, skip_sleep=True, fast_mode=True, verbose_mode=False):
+def simulate_days_alt(projected_volume_df, vol_dim, day_of_week_dist, start_time, handles_base, 
+                      agent_list, abandon_dist, outbound_list=[], outbound_reservation=0.0,
+                      dials_per_reservation=0.0, reservation_length=0,
+                      skip_sleep=True, fast_mode=True, verbose_mode=False):
     
     simulated_days = []
     
@@ -221,7 +224,10 @@ def simulate_days_alt(projected_volume_df, vol_dim, day_of_week_dist, start_time
         for arr, dur in zip(arrival_times, call_durations):
             calls_list.append(Call(arr,dur))
 
-        day_object = Day(agent_list, calls_list)
+        day_object = Day(agent_list, calls_list, outbound_list=outbound_list, 
+                         outbound_reservation=outbound_reservation,
+                         dials_per_reservation=dials_per_reservation,
+                         reservation_length=reservation_length)
 
         simulated_day = simulate_day(day_obj, abandon_dist)
         simulated_days.append(simulated_day)
