@@ -1,5 +1,6 @@
 import math
 from past.builtins import xrange
+from stimulus import round_down_900
 
 #TODO: change all wait_time refs to be threshold instead
 
@@ -65,5 +66,27 @@ def required_server_count(target, rate, interval, aht, wait_time=None, target_ty
         server_count += 1
     
     return server_count
+
+def day_to_erlang_dict(day):
+    """
+    Takes a stimulus.Day object and returns count of calls by 15-minute intervals,
+    simplifying the process of running the Erlang C model on that day.
+    
+    :param day: a stimulus.Day object
+    :returns: a dictionary with keys representing 15-min intervals of day, and values
+    representing the number of calls received in that interval.
+    """
+    first_agent_start = round_down_900(day.earliest_arrival)
+    calls_by_interval = {}
+    day_completed = False
+    arrival_times = []
+
+    for call in day.calls:
+        arrival_times.append(call.arrival_timestamp)
+
+    for x in xrange(0,86400,900):
+        calls_by_interval[x] = sum(1 for i in arrival_times if x <= i < (x + 900))
+      
+    return calls_by_interval
 
 
