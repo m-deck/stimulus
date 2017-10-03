@@ -65,10 +65,10 @@ class Day(object):
         self.earliest_arrival = earliest_arrival
 
     def agents_currently_available(self):
-        return sum([agent.status=='logged_on' and agent.active_call==False and agent.outbound_reserved==False for agent in self.agents])
+        return sum(agent.status=='logged_on' and agent.active_call==False and agent.outbound_reserved==False for agent in self.agents)
 
     def agents_currently_logged_on(self):
-        return sum([agent.status=='logged_on' for agent in self.agents])
+        return sum(agent.status=='logged_on' for agent in self.agents)
 
     def percent_agents_available(self):
         try:
@@ -77,10 +77,10 @@ class Day(object):
             return 0.0
 
     def offered_calls(self):
-        return sum([call.status!='pre-call' for call in self.calls])
+        return sum(call.status!='pre-call' for call in self.calls)
 
     def completed_calls(self):
-        return sum([call.status=='completed' for call in self.calls])
+        return sum(call.status=='completed' for call in self.calls)
 
     def dials_made(self):
         return self.INITIAL_OUTBOUND_LIST_COUNT - len(self.outbound_list)
@@ -89,16 +89,16 @@ class Day(object):
         return len(self.outbound_list)
 
     def active_calls(self):
-        return sum([call.status=='active' for call in self.calls])
+        return sum(call.status=='active' for call in self.calls)
 
     def queued_calls(self):
-        return sum([call.status=='queued' for call in self.calls])
+        return sum(call.status=='queued' for call in self.calls)
 
     def abandoned_calls(self):
-        return sum([call.status=='abandoned' for call in self.calls])
+        return sum(call.status=='abandoned' for call in self.calls)
 
     def calls_within_sl(self):
-        return sum([call.met_sl for call in self.calls])
+        return sum(call.met_sl for call in self.calls)
 
     def service_level(self):
         try:
