@@ -103,12 +103,14 @@ def day_to_erlang_dict(day):
     return calls_by_interval
 
 
-def vol_dict_to_headcount_dict(vol_dict, aht, interval, rate, target, target_type, wait_time):
+def vol_dict_to_headcount_dict(vol_dict, aht, interval, target, target_type, wait_time):
     result_dict = {}
 
     for i in vol_dict:
         if not vol_dict[i] == 0:
-            result_dict[i] = required_server_count(aht, interval, rate, target, target_type, wait_time)
+            rate = vol_dict[i]
+            result_dict[i] = required_server_count(aht=aht, interval=interval, rate=rate, target=target,
+                                                   target_type=target_type, wait_time=wait_time)
         else:
             result_dict[i] = 0
 

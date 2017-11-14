@@ -4,9 +4,61 @@ from utils import secs_to_time
 from pprint import pprint
 
 
+class Queue(object):
+    """
+    A generic queue object.
+    """
+    _ID = 0
+
+    def __init__(self):
+        self.id = self._ID
+        self.__class__._ID += 1
+        self.contents = []
+
+
+class FIFOQueue(Queue):
+    """
+    A FIFO queue. Inherits from / subclass of Queue.
+    """
+    def __init__(self):
+        super(FIFOQueue, self).__init__()
+        self.priority = 1
+
+
+class SearchQueue(Queue):
+    """
+    A search-type queue. Inherits from Queue.
+    """
+    def __init__(self):
+        super(SearchQueue, self).__init__()
+
+
+class Site(object):
+    _ID = 0
+
+    def __init__(self, name):
+        self.id = self._ID
+        self.__class__._ID += 1
+        self.name = name
+        self.tz = None
+
+
+class Schedule(object):
+    _ID = 0
+
+    def __init__(self):
+        self.id = self._ID
+        self.__class__._ID += 1
+
+# eventually, AgentSchedule should inherit from this class??
+# the idea is to also have Schedules be possible for Queues.
+# should Queues just have a regular schedule or do they need a
+# QueueSchedule object??
+
+
 class Agent(object):
     _ID = 0
-    def __init__(self, schedule):
+    def __init__(self, schedule): # maybe schedule shouldn't be required for agent to simply exist...
         self.id = self._ID; self.__class__._ID += 1
         self.schedule = schedule
         self.status = 'logged_off'
@@ -17,6 +69,7 @@ class Agent(object):
         self.handling_call = None
         self.outbound_reserved = False
         self.previously_outbound = False
+        self.skills = []
 
     def reset(self):
         self.status = 'logged_off'
@@ -38,6 +91,7 @@ class AgentSchedule(object):
         self.lunch_duration = lunch_duration
         self.tz = tz
         self.work_days = work_days
+        self.site = None
 
 class Day(object):
     _ID = 0
@@ -143,6 +197,7 @@ class Call(object):
         self.queue_elapsed = None
         self.handled_by = None
         self.met_sl = False
+        self.queue = None
 
     def reset(self):
         self.status = 'pre-call'
