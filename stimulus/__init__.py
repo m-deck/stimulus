@@ -1,2 +1,2 @@
-from stimulus import *
-from erlang import *
+from .stimulus import *
+from .erlang import *

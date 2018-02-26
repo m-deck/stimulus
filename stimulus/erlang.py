@@ -1,6 +1,6 @@
 import math
 from past.builtins import xrange
-from stimulus import round_down_900
+from .stimulus import round_down_900
 
 
 # TODO: change all wait_time refs to be threshold instead

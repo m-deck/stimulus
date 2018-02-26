@@ -1,6 +1,6 @@
 import random
 import time
-from utils import secs_to_time
+from .utils import secs_to_time
 from pprint import pprint
 
 
@@ -411,7 +411,7 @@ def calculate_required_headcount(day, abandon_dist, agent_counts={}, skip_sleep=
                 if day.service_level() < day.sl_target:
                     agent_counts[stamp-900] += 1
                     #pprint(agent_counts)
-                    print agent_counts[stamp-900]
+                    print(agent_counts[stamp-900])
                     break
             if stamp == 86399:
                 day_completed = True
