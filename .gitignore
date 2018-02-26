@@ -102,3 +102,8 @@ ENV/
 
 *.swp
 
+# PyCharm .idea
+.idea
+
+# Pytest cache
+.pytest_cache
