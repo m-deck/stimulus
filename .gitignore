@@ -107,3 +107,6 @@ ENV/
 
 # Pytest cache
 .pytest_cache
+
+# 2to3 backup files
+*.py.bak
