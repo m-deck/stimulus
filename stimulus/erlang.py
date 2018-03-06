@@ -1,5 +1,4 @@
 import math
-from past.builtins import xrange
 from .stimulus import round_down_900
 
 
