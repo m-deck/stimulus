@@ -399,7 +399,7 @@ def calculate_required_headcount(day, abandon_dist, agent_counts={}, skip_sleep=
         
         agent_list = []
 
-        for i in agent_counts.keys():
+        for i in list(agent_counts.keys()):
             for ii in range(0, int(agent_counts[i])):
                 agent_list.append(Agent(AgentSchedule(regular_start=i, regular_end=i+900, regular_lunch=3600*24)))
 
