@@ -25,9 +25,25 @@ class Agent(models.Model):
                              on_delete=models.PROTECT,
                              #null=True, #temporary so the thing doesn't yell
                              )
+    hiring_class = models.ForeignKey(HiringClass,
+                                     blank=True,
+                                     null=True,
+                                     )
 
     def __str__(self):
         return self.first_name + ' ' + self.last_name
+
+
+class HiringClass(models.Model):
+    name = models.CharField(max_length=35)
+    start_date = models.DateField()
+    live_date = models.DateField()
+    hiring_team = models.ForeignKey(Team,
+                                    on_delete=models.PROTECT,
+                                    )
+
+    def __str__(self):
+        return self.name
 
 
 class Site(models.Model):
@@ -36,6 +52,9 @@ class Site(models.Model):
     city = models.CharField(max_length=35)
     state = models.CharField(max_length=35)
     country = models.CharField(max_length=35)
+    operating_company = models.ForeignKey(Company,
+                                          on_delete=models.PROTECT,
+                                          )
     site_manager = models.ForeignKey(Agent,
                                      on_delete=models.PROTECT,
                                      limit_choices_to={'is_supervisor': True,
@@ -44,6 +63,13 @@ class Site(models.Model):
 
     def __str__(self):
         return self.common_name
+
+
+class Company(models.Model):
+    name = models.CharField(max_length=50)
+
+    def __str__(self):
+        return self.name
 
 
 class Team(models.Model):
@@ -57,6 +83,12 @@ class Team(models.Model):
     primary_site = models.ForeignKey(Site,
                                      on_delete=models.PROTECT,
                                      )
+
+    parent_team = models.ForeignKey(Team,
+                                    on_delete=models.PROTECT,
+                                    blank=True,
+                                    null=True,
+                                    )
 
 
     def __str__(self):
@@ -92,13 +124,32 @@ class SkillAssignment(models.Model):
     skill = models.ForeignKey(Skill,
                               on_delete=models.PROTECT,
                               )
+    level = models.PositiveIntegerField(blank=True,
+                                        null=True,
+                                        )
+    assigned_date = models.DateField(blank=True,
+                                     null=True,
+                                     )
+    expiration_date = models.DateField(blank=True,
+                                       null=True,
+                                       )
+    is_active = models.BooleanField(blank=True,
+                                    null=True,
+                                    )
 
-    def __str__(self):        return self.agent.__str__() + ' has skill ' + self.skill.__str__()
+    class Meta:
+        unique_together = ('agent', 'skill')
+
+    def __str__(self):
+        return self.agent.__str__() + ' has skill ' + self.skill.__str__()
 
 
 class Shift(models.Model):
     start_time = models.TimeField()
     end_time = models.TimeField()
+
+    class Meta:
+        unique_together = ('start_time', 'end_time')
 
     def __str__(self):
         return self.start_time.__str__() + ' to ' + self.end_time.__str__()
@@ -108,13 +159,18 @@ class Break(models.Model):
     start_time = models.TimeField()
     end_time = models.TimeField()
 
+    class Meta:
+        unique_together = ('start_time', 'end_time')
+
     def __str__(self):
         return self.start_time.__str__() + ' to ' + self.end_time.__str__()
 
 
 class Schedule(models.Model):
+    name = models.CharField(max_length=50)
     monday_shift = models.ForeignKey(Shift,
-                                     on_delete=models.PROTECT, related_name='2idddw+'
+                                     on_delete=models.PROTECT,
+                                     related_name='2idddw+'
                                      )
     tuesday_shift = models.ForeignKey(Shift,
                                      on_delete=models.PROTECT, related_name='jdje+'
@@ -141,50 +197,60 @@ class Schedule(models.Model):
                                      related_name=
                                      '2j409i0+'
                                      )
-    monday_break1 = models.ForeignKey(Break, on_delete=models.PROTECT, related_name='2ijdgre+')
-    monday_break2 = models.ForeignKey(Break, on_delete=models.PROTECT, related_name='ijd0sk0+')
-    monday_break3 = models.ForeignKey(Break, on_delete=models.PROTECT, related_name='249-9d-us+')
-    monday_break4 = models.ForeignKey(Break, on_delete=models.PROTECT, related_name='aosidnf+')
-    tuesday_break1 = models.ForeignKey(Break, on_delete=models.PROTECT, related_name='0283nds+')
-    tuesday_break2 = models.ForeignKey(Break, on_delete=models.PROTECT, related_name='3838gf+')
-    tuesday_break3 = models.ForeignKey(Break, on_delete=models.PROTECT, related_name='2083hdd+')
-    tuesday_break4 = models.ForeignKey(Break, on_delete=models.PROTECT, related_name='308h0h4+')
-    wednesday_break1 = models.ForeignKey(Break, on_delete=models.PROTECT, related_name='280h0h8d+')
-    wednesday_break2 = models.ForeignKey(Break, on_delete=models.PROTECT, related_name='weihd+')
-    wednesday_break3 = models.ForeignKey(Break, on_delete=models.PROTECT, related_name='2sdh2jd9+')
-    wednesday_break4 = models.ForeignKey(Break, on_delete=models.PROTECT, related_name='20824089dh8+')
-    #thursday_break1 = models.ForeignKey(Break, on_delete=models.PROTECT,)
-    #thursday_break2 = models.ForeignKey(Break, on_delete=models.PROTECT,)
-    #thursday_break3 = models.ForeignKey(Break, on_delete=models.PROTECT,)
-    #thursday_break4 = models.ForeignKey(Break, on_delete=models.PROTECT,)
-    #friday_break1 = models.ForeignKey(Break, on_delete=models.PROTECT,)
-    #friday_break2 = models.ForeignKey(Break, on_delete=models.PROTECT,)
-    #friday_break3 = models.ForeignKey(Break, on_delete=models.PROTECT,)
-    #friday_break4 = models.ForeignKey(Break, on_delete=models.PROTECT,)
-    #saturday_break1 = models.ForeignKey(Break, on_delete=models.PROTECT,)
-    #saturday_break2 = models.ForeignKey(Break, on_delete=models.PROTECT,)
-    #saturday_break3 = models.ForeignKey(Break, on_delete=models.PROTECT,)
-    #saturday_break4 = models.ForeignKey(Break, on_delete=models.PROTECT,)
-    #sunday_break1 = models.ForeignKey(Break, on_delete=models.PROTECT,)
-    #sunday_break2 = models.ForeignKey(Break, on_delete=models.PROTECT,)
-    #sunday_break3 = models.ForeignKey(Break, on_delete=models.PROTECT,)
-    #sunday_break4 = models.ForeignKey(Break, on_delete=models.PROTECT,)
+
+    class Meta:
+        unique_together = ('monday_shift', 'tuesday_shift', 'wednesday_shift', 'thursday_shift', 'friday_shift',
+                           'saturday_shift', 'sunday_shift')
+
+    def __str__(self):
+        return self.name
 
 
 class AgentAssignment(models.Model):
-    agent = models.OneToOneField(Agent,
-                                 on_delete=models.PROTECT,
-                                 )
+    agent = models.ForeignKey(Agent,
+                              on_delete=models.PROTECT,
+                              )
     team = models.ForeignKey(Team,
                              on_delete=models.PROTECT,
                              )
     site = models.ForeignKey(Site,
                              on_delete=models.PROTECT,
                              )
-    schedule = models.ForeignKey(Schedule, on_delete=models.PROTECT)
+    schedule = models.ForeignKey(Schedule,
+                                 on_delete=models.PROTECT)
+    start_date = models.DateField()
+    end_date = models.DateField(blank=True,
+                                null=True,
+                                )
+    is_active = models.BooleanField(blank=True,
+                                    null=True,
+                                    )
 
     def __str__(self):
         return self.agent.__str__() + ' is assigned to ' + self.team.__str__()
+
+
+class AgentScoreType(models.Model):
+    name = models.CharField(max_length=35)
+    related_channel = models.ForeignKey(Channel,
+                                        on_delete=models.PROTECT,
+                                        blank=True,
+                                        null=True,
+                                        )
+
+    def __str__(self):
+        return self.name.__str__()
+
+
+class AgentScore(models.Model):
+    agent = models.ForeignKey(Agent,
+                              on_delete=models.PROTECT,
+                              )
+    score = models.FloatField()
+
+    def __str__(self):
+        return self.agent.__str__() + ' has score ' + self.score.__str__()
+
 
 
 
