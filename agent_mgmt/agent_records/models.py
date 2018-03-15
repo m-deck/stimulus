@@ -1,5 +1,4 @@
 from django.db import models
-#from treebeard import ns_tree
 
 
 class Rank(models.Model):
@@ -25,7 +24,8 @@ class Agent(models.Model):
                              on_delete=models.PROTECT,
                              #null=True, #temporary so the thing doesn't yell
                              )
-    hiring_class = models.ForeignKey(HiringClass,
+    hiring_class = models.ForeignKey("HiringClass",
+                                     on_delete=models.PROTECT,
                                      blank=True,
                                      null=True,
                                      )
@@ -38,7 +38,7 @@ class HiringClass(models.Model):
     name = models.CharField(max_length=35)
     start_date = models.DateField()
     live_date = models.DateField()
-    hiring_team = models.ForeignKey(Team,
+    hiring_team = models.ForeignKey("Team",
                                     on_delete=models.PROTECT,
                                     )
 
@@ -52,8 +52,9 @@ class Site(models.Model):
     city = models.CharField(max_length=35)
     state = models.CharField(max_length=35)
     country = models.CharField(max_length=35)
-    operating_company = models.ForeignKey(Company,
+    operating_company = models.ForeignKey("Company",
                                           on_delete=models.PROTECT,
+                                          null=True,
                                           )
     site_manager = models.ForeignKey(Agent,
                                      on_delete=models.PROTECT,
@@ -84,7 +85,7 @@ class Team(models.Model):
                                      on_delete=models.PROTECT,
                                      )
 
-    parent_team = models.ForeignKey(Team,
+    parent_team = models.ForeignKey("Team",
                                     on_delete=models.PROTECT,
                                     blank=True,
                                     null=True,
@@ -133,8 +134,7 @@ class SkillAssignment(models.Model):
     expiration_date = models.DateField(blank=True,
                                        null=True,
                                        )
-    is_active = models.BooleanField(blank=True,
-                                    null=True,
+    is_active = models.NullBooleanField(blank=True,
                                     )
 
     class Meta:
@@ -167,7 +167,9 @@ class Break(models.Model):
 
 
 class Schedule(models.Model):
-    name = models.CharField(max_length=50)
+    name = models.CharField(max_length=50,
+                            null=True,
+                            )
     monday_shift = models.ForeignKey(Shift,
                                      on_delete=models.PROTECT,
                                      related_name='2idddw+'
@@ -218,12 +220,15 @@ class AgentAssignment(models.Model):
                              )
     schedule = models.ForeignKey(Schedule,
                                  on_delete=models.PROTECT)
-    start_date = models.DateField()
+    start_date = models.DateField(blank=True,
+                                  null=True #temp
+
+    )
     end_date = models.DateField(blank=True,
                                 null=True,
                                 )
-    is_active = models.BooleanField(blank=True,
-                                    null=True,
+    is_active = models.NullBooleanField(blank=True,
+
                                     )
 
     def __str__(self):
