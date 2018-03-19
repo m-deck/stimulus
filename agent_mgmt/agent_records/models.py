@@ -22,7 +22,6 @@ class Agent(models.Model):
                                    blank=True, null=True)
     rank = models.ForeignKey(Rank,
                              on_delete=models.PROTECT,
-                             #null=True, #temporary so the thing doesn't yell
                              )
     hiring_class = models.ForeignKey("HiringClass",
                                      on_delete=models.PROTECT,
@@ -91,7 +90,6 @@ class Team(models.Model):
                                     null=True,
                                     )
 
-
     def __str__(self):
         return self.full_name
 
@@ -135,7 +133,7 @@ class SkillAssignment(models.Model):
                                        null=True,
                                        )
     is_active = models.NullBooleanField(blank=True,
-                                    )
+                                        )
 
     class Meta:
         unique_together = ('agent', 'skill')
@@ -168,36 +166,48 @@ class Break(models.Model):
 
 class Schedule(models.Model):
     name = models.CharField(max_length=50,
-                            null=True,
                             )
     monday_shift = models.ForeignKey(Shift,
                                      on_delete=models.PROTECT,
-                                     related_name='2idddw+'
+                                     related_name='schedule_monday_shifts',
+                                     blank=True,
+                                     null=True,
                                      )
     tuesday_shift = models.ForeignKey(Shift,
-                                     on_delete=models.PROTECT, related_name='jdje+'
-                                     )
+                                      on_delete=models.PROTECT,
+                                      related_name='schedule_tuesday_shifts',
+                                      blank=True,
+                                      null=True,
+                                      )
     wednesday_shift = models.ForeignKey(Shift,
-                                     on_delete=models.PROTECT,
-                                        related_name='job23+',
-                                     )
+                                        on_delete=models.PROTECT,
+                                        related_name='schedule_wednesday_shifts',
+                                        blank=True,
+                                        null=True,
+                                        )
     thursday_shift = models.ForeignKey(Shift,
-                                     on_delete=models.PROTECT,
-                                       related_name='2j4i+'
-                                     )
+                                       on_delete=models.PROTECT,
+                                       related_name='schedule_thursday_shifts',
+                                       blank=True,
+                                       null=True,
+                                       )
     friday_shift = models.ForeignKey(Shift,
                                      on_delete=models.PROTECT,
-                                     related_name='23irij+'
-
+                                     related_name='schedule_friday_shifts',
+                                     blank=True,
+                                     null=True,
                                      )
     saturday_shift = models.ForeignKey(Shift,
-                                     on_delete=models.PROTECT,
-                                       related_name='ij2ijid+'
-                                     )
+                                       on_delete=models.PROTECT,
+                                       related_name='schedule_saturday_shifts',
+                                       blank=True,
+                                       null=True,
+                                       )
     sunday_shift = models.ForeignKey(Shift,
                                      on_delete=models.PROTECT,
-                                     related_name=
-                                     '2j409i0+'
+                                     related_name='schedule_sunday_shifts',
+                                     blank=True,
+                                     null=True,
                                      )
 
     class Meta:
@@ -220,16 +230,12 @@ class AgentAssignment(models.Model):
                              )
     schedule = models.ForeignKey(Schedule,
                                  on_delete=models.PROTECT)
-    start_date = models.DateField(blank=True,
-                                  null=True #temp
-
-    )
+    start_date = models.DateField()
     end_date = models.DateField(blank=True,
                                 null=True,
                                 )
     is_active = models.NullBooleanField(blank=True,
-
-                                    )
+                                        )
 
     def __str__(self):
         return self.agent.__str__() + ' is assigned to ' + self.team.__str__()
@@ -251,17 +257,12 @@ class AgentScore(models.Model):
     agent = models.ForeignKey(Agent,
                               on_delete=models.PROTECT,
                               )
+    score_type = models.ForeignKey(AgentScoreType,
+                                   on_delete=models.PROTECT,
+                                   blank=False,
+                                   null=False
+                                   )
     score = models.FloatField()
 
     def __str__(self):
         return self.agent.__str__() + ' has score ' + self.score.__str__()
-
-
-
-
-
-
-
-
-
-
