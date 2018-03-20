@@ -2,7 +2,9 @@ from django.db import models
 
 
 class Rank(models.Model):
-    title = models.CharField(max_length=50)
+    title = models.CharField(max_length=50,
+                             unique=True,
+                             )
     value = models.PositiveSmallIntegerField()
     can_supervise = models.BooleanField()
 
@@ -13,7 +15,9 @@ class Rank(models.Model):
 class Agent(models.Model):
     first_name = models.CharField(max_length=35)
     last_name = models.CharField(max_length=35)
-    email_address = models.CharField(max_length=255)
+    email_address = models.CharField(max_length=255,
+                                     unique=True,
+                                     )
     is_supervisor = models.BooleanField()
     is_active = models.BooleanField()
     hire_date = models.DateField()
@@ -34,7 +38,9 @@ class Agent(models.Model):
 
 
 class HiringClass(models.Model):
-    name = models.CharField(max_length=35)
+    name = models.CharField(max_length=35,
+                            unique=True,
+                            )
     start_date = models.DateField()
     live_date = models.DateField()
     hiring_team = models.ForeignKey("Team",
@@ -46,8 +52,12 @@ class HiringClass(models.Model):
 
 
 class Site(models.Model):
-    common_name = models.CharField(max_length=35)
-    short_name = models.CharField(max_length=5)
+    common_name = models.CharField(max_length=35,
+                                   unique=True,
+                                   )
+    short_name = models.CharField(max_length=5,
+                                  unique=True,
+                                  )
     city = models.CharField(max_length=35)
     state = models.CharField(max_length=35)
     country = models.CharField(max_length=35)
@@ -73,8 +83,12 @@ class Company(models.Model):
 
 
 class Team(models.Model):
-    full_name = models.CharField(max_length=100)
-    short_name = models.CharField(max_length=20)
+    full_name = models.CharField(max_length=100,
+                                 unique=True,
+                                 )
+    short_name = models.CharField(max_length=20,
+                                  unique=True,
+                                  )
     supervisor = models.ForeignKey(Agent,
                                    on_delete=models.PROTECT,
                                    limit_choices_to={'is_supervisor': True,
@@ -95,15 +109,20 @@ class Team(models.Model):
 
 
 class Channel(models.Model):
-    name = models.CharField(max_length=35)
-    vendor_name = models.CharField(max_length=35)
+    name = models.CharField(max_length=35,
+                            unique=True,
+                            )
+    vendor_name = models.CharField(max_length=35,
+                                   )
 
     def __str__(self):
         return self.name
 
 
 class Skill(models.Model):
-    full_name = models.CharField(max_length=50)
+    full_name = models.CharField(max_length=50,
+                                 unique=True,
+                                 )
     channel = models.ForeignKey(Channel,
                                 on_delete=models.PROTECT,
                                 )
@@ -113,7 +132,7 @@ class Skill(models.Model):
                                               )
 
     def __str__(self):
-        return self.full_name
+        return self.channel + ' - ' + self.full_name
 
 
 class SkillAssignment(models.Model):
@@ -166,6 +185,7 @@ class Break(models.Model):
 
 class Schedule(models.Model):
     name = models.CharField(max_length=50,
+                            unique=True,
                             )
     monday_shift = models.ForeignKey(Shift,
                                      on_delete=models.PROTECT,
@@ -242,7 +262,9 @@ class AgentAssignment(models.Model):
 
 
 class AgentScoreType(models.Model):
-    name = models.CharField(max_length=35)
+    name = models.CharField(max_length=35,
+                            unique=True,
+                            )
     related_channel = models.ForeignKey(Channel,
                                         on_delete=models.PROTECT,
                                         blank=True,
