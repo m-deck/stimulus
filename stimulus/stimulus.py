@@ -286,7 +286,7 @@ def simulate_days_alt(projected_volume_df, vol_dim, day_of_week_dist, day_start_
                          dials_per_reservation=dials_per_reservation,
                          reservation_length=reservation_length)
 
-        simulated_day = simulate_day(day_obj, abandon_dist)
+        simulated_day = simulate_day(day_object, abandon_dist)
         simulated_days.append(simulated_day)
     
     return simulated_days
