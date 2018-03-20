@@ -1,6 +1,6 @@
 from django.contrib import admin
 from .models import (Agent, Team, Site, Channel, Skill, Rank, AgentAssignment, Shift, Schedule, Break, Company,
-                     HiringClass, AgentScore, AgentScoreType)
+                     HiringClass, AgentScore, AgentScoreType, SkillAssignment)
 from reversion.admin import VersionAdmin
 
 
@@ -37,7 +37,17 @@ class ScheduleAdmin(VersionAdmin):
                     'saturday_shift', 'sunday_shift')
 
 
-model_list = [Skill, Rank, AgentAssignment, Shift, Break, Company, HiringClass, AgentScore, AgentScoreType]
+@admin.register(SkillAssignment)
+class SkillAssignmentAdmin(VersionAdmin):
+    list_display = ('agent', 'skill', 'level', 'assigned_date', 'expiration_date', 'is_active')
+
+
+@admin.register(HiringClass)
+class HiringClassAdmin(VersionAdmin):
+    list_display = ('name', 'start_date', 'live_date', 'hiring_team')
+
+
+model_list = [Skill, Rank, AgentAssignment, Shift, Break, Company, AgentScore, AgentScoreType]
 
 for model in model_list:
     admin.site.register(model)
