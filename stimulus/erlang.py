@@ -1,5 +1,4 @@
 import math
-from past.builtins import xrange
 from .stimulus import round_down_900
 
 
@@ -12,7 +11,7 @@ def intensity(aht, interval, rate):
 def erlang_b(server_count, intensity):
     ib = 1.0
     server_count = int(server_count)  # need explicit cast here to prevent range TypeError
-    for i in xrange(0, server_count):
+    for i in range(0, server_count):
         ib = 1.0 + ib * ((float(i) + 1.0) / float(intensity))
     return 1.0 / ib
 
@@ -97,7 +96,7 @@ def day_to_erlang_dict(day):
     for call in day.calls:
         arrival_times.append(call.arrival_timestamp)
 
-    for x in xrange(0, 86400, 900):
+    for x in range(0, 86400, 900):
         calls_by_interval[x] = sum(1 for i in arrival_times if x <= i < (x + 900))
 
     return calls_by_interval
