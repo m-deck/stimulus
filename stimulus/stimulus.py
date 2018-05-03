@@ -438,6 +438,8 @@ def binary_search(current, previous, forward=True):
         current += 0.5 * difference
     else:
         current -= 0.5 * difference
+        if current < 0:
+            current = 0
     return current, previous
 
 def calculate_required_headcount(day, abandon_dist, agent_counts={}, skip_sleep=True, fast_mode=True, verbose_mode=False):
@@ -476,7 +478,7 @@ def calculate_required_headcount(day, abandon_dist, agent_counts={}, skip_sleep=
                     #pprint(agent_counts)
                     print(agent_counts[last_interval])
                     break
-                elif day.service_level() >= day.sl_upper_limit:
+                elif (day.service_level() >= day.sl_upper_limit) and (agent_counts[last_interval] > 0):
                     agent_counts[last_interval], prev_agent_counts[last_interval] = binary_search(
                         agent_counts[last_interval],
                         prev_agent_counts[last_interval],
