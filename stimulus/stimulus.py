@@ -1,6 +1,6 @@
 import random
 import time
-from .utils import secs_to_time
+from utils import secs_to_time
 from pprint import pprint
 
 
@@ -209,8 +209,6 @@ class Call(object):
 
 def simulate_one_step(timestamp, day, abandon_dist, skip_sleep=True, fast_mode=True, verbose_mode=False):
     i = timestamp
-    day.agents = agent_logons(day.agents, i)
-    day.agents = agent_logoffs(day.agents, i)
     day.calls = queue_calls(day.calls, i)
     day = answer_calls(day, i)
     day = hangup_calls(day, i)
@@ -218,10 +216,14 @@ def simulate_one_step(timestamp, day, abandon_dist, skip_sleep=True, fast_mode=T
     day = abandon_calls(day, i, abandon_dist)
     day = reserve_outbound(day, i)
     day = cancel_reservation(day, i)
-    day.agents = update_agent_status_stats(day.agents, i)
 
     c = 0
     pc = 0
+
+    for agent in day.agents:
+        agent = agent_logons(agent, i)
+        agent = agent_logoffs(agent, i)
+        agent = update_agent_status_stats(agent, i)
 
     for call in day.calls:
         if call.status == 'completed':
@@ -292,28 +294,25 @@ def simulate_days_alt(projected_volume_df, vol_dim, day_of_week_dist, day_start_
     return simulated_days
 
 
-def agent_logons(agents, timestamp):
-    for agent in agents:
-        if agent.schedule.regular_start == timestamp and agent.status == 'logged_off':
-            agent.status = 'logged_on'
-    return agents
+def agent_logons(agent, timestamp):
+    if agent.schedule.regular_start == timestamp and agent.status == 'logged_off':
+        agent.status = 'logged_on'
+    return agent
 
-def agent_logoffs(agents, timestamp):
-    for agent in agents:
-        if agent.active_call == False and agent.status == 'logged_on' and agent.schedule.regular_end <= timestamp and agent.outbound_reserved == False:
-            agent.status = 'logged_off'
-    return agents
+def agent_logoffs(agent, timestamp):
+    if agent.active_call == False and agent.status == 'logged_on' and agent.schedule.regular_end <= timestamp and agent.outbound_reserved == False:
+        agent.status = 'logged_off'
+    return agent
 
-def update_agent_status_stats(agents, timestamp):
-    for agent in agents:
-        if agent.last_status != agent.status or agent.previously_active != agent.active_call or agent.previously_outbound != agent.outbound_reserved:
-            agent.last_status = agent.status
-            agent.previously_active = agent.active_call
-            agent.previously_outbound = agent.outbound_reserved
-            agent.time_in_status = 0
-        else:
-            agent.time_in_status += 1
-    return agents
+def update_agent_status_stats(agent, timestamp):
+    if agent.last_status != agent.status or agent.previously_active != agent.active_call or agent.previously_outbound != agent.outbound_reserved:
+        agent.last_status = agent.status
+        agent.previously_active = agent.active_call
+        agent.previously_outbound = agent.outbound_reserved
+        agent.time_in_status = 0
+    else:
+        agent.time_in_status += 1
+    return agent
 
 def queue_calls(calls_list, timestamp):
     for call in calls_list:
