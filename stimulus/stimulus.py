@@ -130,6 +130,7 @@ class Day(object):
         self.queued_calls = 0
         self.abandoned_calls = 0
         self.calls_within_sl = 0
+        self.average_aht = '--'
 
     def percent_agents_available(self):
         try:
@@ -153,7 +154,7 @@ class Day(object):
         return (' offered: ' + str(self.offered_calls) + ' queued: ' + str(self.queued_calls) + ' active: ' + str(self.active_calls) +
                 ' completed: ' + str(self.completed_calls) + ' abandoned: ' + str(self.abandoned_calls) +
                 ' SL: ' + "{0:.2f}%".format(100*self.service_level()) +
-                ' aht: ' + str(self.aht()) +
+                ' aht: ' + str(self.average_aht) +
                 ' dials: ' + str(self.dials_made()) +
                 ' dials left: ' + str(self.dials_remaining())
                )
@@ -213,6 +214,7 @@ def simulate_one_step(timestamp, day, abandon_dist, skip_sleep=True, fast_mode=T
     day.queued_calls = 0
     day.abandoned_calls = 0
     day.calls_within_sl = 0
+    day.average_aht = day.aht()
 
     for agent in day.agents:
         agent = agent_logons(agent, i)
@@ -495,5 +497,5 @@ def calculate_required_headcount(day, abandon_dist, agent_counts={}, skip_sleep=
                 day_completed = True
 
     pprint(agent_counts)
-    return agent_counts
+    return agent_counts, day
 
