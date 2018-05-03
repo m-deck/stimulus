@@ -440,6 +440,7 @@ def binary_search(current, previous, forward=True):
         current -= 0.5 * difference
         if current < 0:
             current = 0
+    current = int(current)
     return current, previous
 
 def calculate_required_headcount(day, abandon_dist, agent_counts={}, skip_sleep=True, fast_mode=True, verbose_mode=False):
