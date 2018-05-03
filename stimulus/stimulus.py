@@ -209,11 +209,6 @@ class Call(object):
 
 def simulate_one_step(timestamp, day, abandon_dist, skip_sleep=True, fast_mode=True, verbose_mode=False):
     i = timestamp
-    day.calls = queue_calls(day.calls, i)
-    day = answer_calls(day, i)
-    day = hangup_calls(day, i)
-    day.calls = update_queued_call_stats(day.calls, i)
-    day = abandon_calls(day, i, abandon_dist)
     day = reserve_outbound(day, i)
     day = cancel_reservation(day, i)
 
@@ -226,6 +221,11 @@ def simulate_one_step(timestamp, day, abandon_dist, skip_sleep=True, fast_mode=T
         agent = update_agent_status_stats(agent, i)
 
     for call in day.calls:
+        call = queue_calls(call, i)
+        call = answer_calls(call, day, i)
+        call = hangup_calls(call, i)
+        call = update_queued_call_stats(call, i)
+        call = abandon_calls(call, i, abandon_dist)
         if call.status == 'completed':
             c += 1
         elif call.status == 'pre-call':
@@ -314,54 +314,49 @@ def update_agent_status_stats(agent, timestamp):
         agent.time_in_status += 1
     return agent
 
-def queue_calls(calls_list, timestamp):
-    for call in calls_list:
-        if call.arrival_timestamp == timestamp:
-            call.status = 'queued'
-            call.queued_at = timestamp
-    return calls_list
+def queue_calls(call, timestamp):
+    if call.arrival_timestamp == timestamp:
+        call.status = 'queued'
+        call.queued_at = timestamp
+    return call
 
-def update_queued_call_stats(calls_list, timestamp):
-    for call in calls_list:
-        if call.status == 'queued':
-            call.queue_elapsed = timestamp - call.queued_at
-    return calls_list
+def update_queued_call_stats(call, timestamp):
+    if call.status == 'queued':
+        call.queue_elapsed = timestamp - call.queued_at
+    return call
 
-def answer_calls(day, timestamp):
-    for call in day.calls:
-        if call.status == 'queued':
-            for agent in day.agents:
-                if agent.status == 'logged_on' and agent.active_call == False and agent.outbound_reserved == False:
-                    agent.active_call = True
-                    agent.handling_call = call.id
-                    call.handled_by = agent
-                    call.answered_at = timestamp
-                    call.queue_elapsed = timestamp - call.queued_at
-                    call.met_sl = (call.queue_elapsed <= day.sl_threshold)
-                    call.status = 'active'
-                    break
-    return day
+def answer_calls(call, day, timestamp):
+    if call.status == 'queued':
+        for agent in day.agents:
+            if agent.status == 'logged_on' and agent.active_call == False and agent.outbound_reserved == False:
+                agent.active_call = True
+                agent.handling_call = call.id
+                call.handled_by = agent
+                call.answered_at = timestamp
+                call.queue_elapsed = timestamp - call.queued_at
+                call.met_sl = (call.queue_elapsed <= day.sl_threshold)
+                call.status = 'active'
+                break
+    return call
 
-def hangup_calls(day, timestamp):
-    for call in day.calls:
-        if call.status == 'active' and (call.duration + call.answered_at) <= timestamp:
-            call.status = 'completed'
-            call.completed_at = timestamp
-            call.handled_by.active_call = False
-            call.handled_by.handling_call = None 
-    return day
+def hangup_calls(call, timestamp):
+    if call.status == 'active' and (call.duration + call.answered_at) <= timestamp:
+        call.status = 'completed'
+        call.completed_at = timestamp
+        call.handled_by.active_call = False
+        call.handled_by.handling_call = None
+    return call
 
-def abandon_calls(day, timestamp, abandon_distribution):
+def abandon_calls(call, timestamp, abandon_distribution):
     abandon_distribution = sorted(abandon_distribution)
-    for call in day.calls:
-        if call.status == 'queued':
-            for aban_tuple in abandon_distribution:
-                if aban_tuple[0] >= call.queue_elapsed:
-                    if random.random() >= aban_tuple[1]:
-                        call.status = 'abandoned'
-                        call.abandoned_at = timestamp  
-                        break
-    return day
+    if call.status == 'queued':
+        for aban_tuple in abandon_distribution:
+            if aban_tuple[0] >= call.queue_elapsed:
+                if random.random() >= aban_tuple[1]:
+                    call.status = 'abandoned'
+                    call.abandoned_at = timestamp
+                    break
+    return call
 
 def reserve_outbound(day, timestamp):
     if not day.outbound_list == [] and day.percent_agents_available() < day.outbound_reservation and day.agents_currently_available() >= 2:
