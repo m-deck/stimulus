@@ -2,6 +2,7 @@ import random
 import time
 from utils import secs_to_time
 from pprint import pprint
+import copy
 
 
 class Queue(object):
@@ -444,11 +445,15 @@ def calculate_required_headcount(day, abandon_dist, agent_counts={}, skip_sleep=
     first_agent_start = round_down_900(day.earliest_arrival)
 
     day_completed = False
+
+    saved_day_state = copy.deepcopy(day)
+    completed_time = first_agent_start
+
     prev_agent_counts = {x: 0 for x in range(3600*24) if x % 900 == 0}
 
     while not day_completed:
         
-        day.reset()
+        day = copy.deepcopy(saved_day_state)
         
         agent_list = []
 
@@ -458,7 +463,7 @@ def calculate_required_headcount(day, abandon_dist, agent_counts={}, skip_sleep=
 
         day.agents = agent_list
         
-        for stamp in range(first_agent_start,3600*24):
+        for stamp in range(completed_time,3600*24):
             day = simulate_one_step(timestamp=stamp, day=day, abandon_dist=abandon_dist, skip_sleep=skip_sleep, fast_mode=fast_mode, verbose_mode=verbose_mode)
             if stamp % 900 == 0:
                 day.sl_interval_dict[stamp] = day.service_level()
@@ -480,6 +485,9 @@ def calculate_required_headcount(day, abandon_dist, agent_counts={}, skip_sleep=
                     #pprint(agent_counts)
                     print(agent_counts[last_interval])
                     break
+                else:
+                    saved_day_state = copy.deepcopy(day)
+                    completed_time = stamp
             if stamp == 86399:
                 day_completed = True
 
