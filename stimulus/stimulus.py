@@ -118,23 +118,22 @@ class Day(object):
 
         self.earliest_arrival = earliest_arrival
 
-    def agents_currently_available(self):
-        return sum(agent.status=='logged_on' and agent.active_call==False and agent.outbound_reserved==False for agent in self.agents)
+        self.agents_currently_available = 0
+        self.agents_currently_logged_on = 0
 
-    def agents_currently_logged_on(self):
-        return sum(agent.status=='logged_on' for agent in self.agents)
+        self.offered_calls = 0
+        self.completed_calls = 0
+        self.completed_calls_total_duration = 0
+        self.active_calls = 0
+        self.queued_calls = 0
+        self.abandoned_calls = 0
+        self.calls_within_sl = 0
 
     def percent_agents_available(self):
         try:
-            return self.agents_currently_available() / self.agents_currently_logged_on()
+            return self.agents_currently_available / self.agents_currently_logged_on
         except ZeroDivisionError:
             return 0.0
-
-    def offered_calls(self):
-        return sum(call.status!='pre-call' for call in self.calls)
-
-    def completed_calls(self):
-        return sum(call.status=='completed' for call in self.calls)
 
     def dials_made(self):
         return self.INITIAL_OUTBOUND_LIST_COUNT - len(self.outbound_list)
@@ -142,27 +141,15 @@ class Day(object):
     def dials_remaining(self):
         return len(self.outbound_list)
 
-    def active_calls(self):
-        return sum(call.status=='active' for call in self.calls)
-
-    def queued_calls(self):
-        return sum(call.status=='queued' for call in self.calls)
-
-    def abandoned_calls(self):
-        return sum(call.status=='abandoned' for call in self.calls)
-
-    def calls_within_sl(self):
-        return sum(call.met_sl for call in self.calls)
-
     def service_level(self):
         try:
-            return 1.0 * self.calls_within_sl() / self.offered_calls()
+            return 1.0 * self.calls_within_sl / self.offered_calls
         except ZeroDivisionError:
             return 1.0
 
     def print_status_line(self):
-        return (' offered: ' + str(self.offered_calls()) + ' queued: ' + str(self.queued_calls()) + ' active: ' + str(self.active_calls()) +
-                ' completed: ' + str(self.completed_calls()) + ' abandoned: ' + str(self.abandoned_calls()) +
+        return (' offered: ' + str(self.offered_calls) + ' queued: ' + str(self.queued_calls) + ' active: ' + str(self.active_calls) +
+                ' completed: ' + str(self.completed_calls) + ' abandoned: ' + str(self.abandoned_calls) +
                 ' SL: ' + "{0:.2f}%".format(100*self.service_level()) +
                 ' aht: ' + str(self.aht()) +
                 ' dials: ' + str(self.dials_made()) +
@@ -174,7 +161,7 @@ class Day(object):
 
     def aht(self):
         try:
-            return sum([call.duration for call in self.list_of_completed_calls()]) / len(self.list_of_completed_calls())
+            return self.completed_calls_total_duration / self.completed_calls
         except ZeroDivisionError:
             return '--'
 
@@ -215,10 +202,22 @@ def simulate_one_step(timestamp, day, abandon_dist, skip_sleep=True, fast_mode=T
     c = 0
     pc = 0
 
+    day.agents_currently_available = 0
+    day.agents_currently_logged_on = 0
+    day.offered_calls = 0
+    day.completed_calls = 0
+    day.completed_calls_total_duration = 0
+    day.active_calls = 0
+    day.queued_calls = 0
+    day.abandoned_calls = 0
+    day.calls_within_sl = 0
+
     for agent in day.agents:
         agent = agent_logons(agent, i)
         agent = agent_logoffs(agent, i)
         agent = update_agent_status_stats(agent, i)
+        day = agents_currently_available(day, agent)
+        day = agents_currently_logged_on(day, agent)
 
     for call in day.calls:
         call = queue_calls(call, i)
@@ -230,6 +229,12 @@ def simulate_one_step(timestamp, day, abandon_dist, skip_sleep=True, fast_mode=T
             c += 1
         elif call.status == 'pre-call':
             pc += 1
+        day = offered_calls(day, call)
+        day = completed_calls(day, call)
+        day = active_calls(day, call)
+        day = queued_calls(day, call)
+        day = abandoned_calls(day, call)
+        day = calls_within_sl(day, call)
     
     if pc == len(day.calls) or c == len(day.calls):
         fast_mode = True # enters fast mode when all calls are pre-call or done
@@ -314,6 +319,16 @@ def update_agent_status_stats(agent, timestamp):
         agent.time_in_status += 1
     return agent
 
+def agents_currently_available(day, agent):
+    if agent.status == 'logged_on' and agent.active_call == False and agent.outbound_reserved == False:
+        day.agents_currently_available += 1
+    return day
+
+def agents_currently_logged_on(day, agent):
+    if agent.status == 'logged_on':
+        day.agents_currently_logged_on += 1
+    return day
+
 def queue_calls(call, timestamp):
     if call.arrival_timestamp == timestamp:
         call.status = 'queued'
@@ -357,6 +372,37 @@ def abandon_calls(call, timestamp, abandon_distribution):
                     call.abandoned_at = timestamp
                     break
     return call
+
+def offered_calls(day, call):
+    if call.status != 'pre-call':
+        day.offered_calls += 1
+    return day
+
+def completed_calls(day, call):
+    if call.status == 'completed':
+        day.completed_calls += 1
+        day.completed_calls_total_duration += call.duration
+    return day
+
+def active_calls(day, call):
+    if call.status == 'active':
+        day.active_calls += 1
+    return day
+
+def queued_calls(day, call):
+    if call.status == 'queued':
+        day.queued_calls += 1
+    return day
+
+def abandoned_calls(day, call):
+    if call.status == 'abandoned':
+        day.abandoned_calls += 1
+    return day
+
+def calls_within_sl(day, call):
+    if call.met_sl:
+        day.calls_within_sl += 1
+    return day
 
 def reserve_outbound(day, timestamp):
     if not day.outbound_list == [] and day.percent_agents_available() < day.outbound_reservation and day.agents_currently_available() >= 2:
