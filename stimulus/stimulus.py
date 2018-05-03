@@ -106,6 +106,7 @@ class Day(object):
         self.INITIAL_OUTBOUND_LIST_COUNT = len(outbound_list)
         self.sl_threshold = 20
         self.sl_target = 0.90
+        self.sl_upper_limit = 1.0
         self.interval = 15 * 60 # 15 minutes
 
         self.sl_interval_dict = {}
@@ -429,11 +430,21 @@ def cancel_reservation(day, timestamp):
 def round_down_900(stamp):
     return stamp - (stamp % 900)
 
+def binary_search(current, previous, forward=True):
+    difference = abs(previous - current)
+    previous = current
+    if forward:
+        current += 0.5 * difference
+    else:
+        current -= 0.5 * difference
+    return current, previous
+
 def calculate_required_headcount(day, abandon_dist, agent_counts={}, skip_sleep=True, fast_mode=True, verbose_mode=False):
     
     first_agent_start = round_down_900(day.earliest_arrival)
 
     day_completed = False
+    prev_agent_counts = {x: 0 for x in range(3600*24) if x % 900 == 0}
 
     while not day_completed:
         
@@ -450,10 +461,24 @@ def calculate_required_headcount(day, abandon_dist, agent_counts={}, skip_sleep=
         for stamp in range(first_agent_start,3600*24):
             day = simulate_one_step(timestamp=stamp, day=day, abandon_dist=abandon_dist, skip_sleep=skip_sleep, fast_mode=fast_mode, verbose_mode=verbose_mode)
             if stamp % 900 == 0:
+                day.sl_interval_dict[stamp] = day.service_level()
+                last_interval = stamp-900
                 if day.service_level() < day.sl_target:
-                    agent_counts[stamp-900] += 1
+                    agent_counts[last_interval], prev_agent_counts[last_interval] = binary_search(
+                        agent_counts[last_interval],
+                        prev_agent_counts[last_interval],
+                    )
                     #pprint(agent_counts)
-                    print(agent_counts[stamp-900])
+                    print(agent_counts[last_interval])
+                    break
+                elif day.service_level() >= day.sl_upper_limit:
+                    agent_counts[last_interval], prev_agent_counts[last_interval] = binary_search(
+                        agent_counts[last_interval],
+                        prev_agent_counts[last_interval],
+                        forward=False,
+                    )
+                    #pprint(agent_counts)
+                    print(agent_counts[last_interval])
                     break
             if stamp == 86399:
                 day_completed = True
