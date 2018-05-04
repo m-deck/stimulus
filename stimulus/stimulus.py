@@ -1,6 +1,6 @@
 import random
 import time
-from utils import secs_to_time
+from .utils import secs_to_time
 from pprint import pprint
 import copy
 
