@@ -107,7 +107,6 @@ class Day(object):
         self.INITIAL_OUTBOUND_LIST_COUNT = len(outbound_list)
         self.sl_threshold = 20
         self.sl_target = 0.90
-        self.sl_upper_limit = 1.0
         self.interval = 15 * 60 # 15 minutes
 
         self.sl_interval_dict = {}
@@ -132,6 +131,9 @@ class Day(object):
         self.calls_within_sl = 0
         self.average_aht = '--'
 
+        self.interval_offered_calls = 0
+        self.interval_calls_within_sl = 0
+
     def percent_agents_available(self):
         try:
             return self.agents_currently_available / self.agents_currently_logged_on
@@ -147,6 +149,12 @@ class Day(object):
     def service_level(self):
         try:
             return 1.0 * self.calls_within_sl / self.offered_calls
+        except ZeroDivisionError:
+            return 1.0
+
+    def interval_service_level(self):
+        try:
+            return 1.0 * self.interval_calls_within_sl / self.interval_offered_calls
         except ZeroDivisionError:
             return 1.0
 
@@ -224,7 +232,7 @@ def simulate_one_step(timestamp, day, abandon_dist, skip_sleep=True, fast_mode=T
         day = agents_currently_logged_on(day, agent)
 
     for call in day.calls:
-        call = queue_calls(call, i)
+        call = queue_calls(call, day, i)
         call = answer_calls(call, day, i)
         call = hangup_calls(call, i)
         call = update_queued_call_stats(call, i)
@@ -333,10 +341,11 @@ def agents_currently_logged_on(day, agent):
         day.agents_currently_logged_on += 1
     return day
 
-def queue_calls(call, timestamp):
+def queue_calls(call, day, timestamp):
     if call.arrival_timestamp == timestamp:
         call.status = 'queued'
         call.queued_at = timestamp
+        day.interval_offered_calls += 1
     return call
 
 def update_queued_call_stats(call, timestamp):
@@ -355,6 +364,8 @@ def answer_calls(call, day, timestamp):
                 call.queue_elapsed = timestamp - call.queued_at
                 call.met_sl = (call.queue_elapsed <= day.sl_threshold)
                 call.status = 'active'
+                if call.met_sl:
+                    day.interval_calls_within_sl += 1
                 break
     return call
 
@@ -433,17 +444,50 @@ def cancel_reservation(day, timestamp):
 def round_down_900(stamp):
     return stamp - (stamp % 900)
 
-def binary_search(current, previous, forward=True):
-    difference = abs(previous - current)
-    previous = current
-    if forward:
-        current += 0.5 * difference
+def binary_search(hc, hc_range, increase=True):
+    if increase:
+        multiplier = 1  # defines the direction of change
+        hc_range['lower'] = hc  # If target is above current HC, set new lower limit
+        key = 'upper'
     else:
-        current -= 0.5 * difference
-        if current < 0:
-            current = 0
-    current = int(current)
-    return current, previous
+        multiplier = -1
+        hc_range['upper'] = hc  # If target is below current HC, set new upper limit
+        key = 'lower'
+    difference = abs(hc - hc_range[key])
+    change = max(0.5 * difference, 1) * multiplier  # Change cannot be less than 1 or negative, hence max
+    change = int(change)  # rounds the change number
+    hc += change
+    return hc
+
+def optimize_interval(interval, day, agent_counts_dict, hc_ranges_dict, last_change_dict):
+    sl_below_target = day.interval_service_level() < day.sl_target
+    sl_above_target = day.interval_service_level() > day.sl_target
+    if sl_below_target or sl_above_target:
+        if sl_above_target and (agent_counts_dict[interval] == 0):
+            pass    # If SL is above target even with no available agents, no change needed
+        else:
+            increase_hc = sl_below_target   # determines the direction of change
+            new_hc = binary_search(
+                hc=agent_counts_dict[interval],
+                hc_range=hc_ranges_dict[interval],
+                increase=increase_hc,
+            )
+            if hc_ranges_dict[interval]['lower'] == hc_ranges_dict[interval]['upper']:
+                pass    # if upper and lower limits are same, that should be the optimal HC
+            else:
+                # This is to avoid endless loop of trying to increase and decrease HC
+                # We need HC that results in SL just above target, hence last change should be increase in such case
+                last_change_was_increase = last_change_dict['increase']
+                required_drop_equals_last_increase = (agent_counts_dict[interval]-new_hc == last_change_dict['change'])
+                if last_change_was_increase and required_drop_equals_last_increase:
+                    pass
+                else:
+                    last_change_dict['increase'] = increase_hc  # record direction of change
+                    last_change_dict['change'] = abs(agent_counts_dict[interval]-new_hc)    # record change in HC
+                    agent_counts_dict[interval] = new_hc
+                    print(new_hc)
+                    return False
+    return True
 
 def calculate_required_headcount(day, abandon_dist, agent_counts={}, skip_sleep=True, fast_mode=True, verbose_mode=False):
     
@@ -454,7 +498,9 @@ def calculate_required_headcount(day, abandon_dist, agent_counts={}, skip_sleep=
     saved_day_state = copy.deepcopy(day)
     completed_time = first_agent_start
 
-    prev_agent_counts = {x: 0 for x in range(3600*24) if x % 900 == 0}
+    interval_hc_ranges = {x: {'lower': 0, 'upper': 100} for x in range(3600*24) if x % 900 == 0}
+    optimized_intervals = []
+    last_change = {'increase': False, 'change': 0}
 
     while not day_completed:
         
@@ -470,29 +516,28 @@ def calculate_required_headcount(day, abandon_dist, agent_counts={}, skip_sleep=
         
         for stamp in range(completed_time,3600*24):
             day = simulate_one_step(timestamp=stamp, day=day, abandon_dist=abandon_dist, skip_sleep=skip_sleep, fast_mode=fast_mode, verbose_mode=verbose_mode)
+
             if stamp % 900 == 0:
                 day.sl_interval_dict[stamp] = day.service_level()
-                last_interval = stamp-900
-                if day.service_level() < day.sl_target:
-                    agent_counts[last_interval], prev_agent_counts[last_interval] = binary_search(
-                        agent_counts[last_interval],
-                        prev_agent_counts[last_interval],
+                # last_interval = stamp-900
+
+                if stamp-900 not in optimized_intervals:
+                    continue_sim = optimize_interval(
+                        interval=stamp-900,
+                        day=day,
+                        agent_counts_dict=agent_counts,
+                        hc_ranges_dict=interval_hc_ranges,
+                        last_change_dict=last_change,
                     )
-                    #pprint(agent_counts)
-                    print(agent_counts[last_interval])
-                    break
-                elif (day.service_level() >= day.sl_upper_limit) and (agent_counts[last_interval] > 0):
-                    agent_counts[last_interval], prev_agent_counts[last_interval] = binary_search(
-                        agent_counts[last_interval],
-                        prev_agent_counts[last_interval],
-                        forward=False,
-                    )
-                    #pprint(agent_counts)
-                    print(agent_counts[last_interval])
-                    break
-                else:
-                    saved_day_state = copy.deepcopy(day)
-                    completed_time = stamp
+                    if not continue_sim:
+                        break
+
+                optimized_intervals.append(stamp-900)   # to avoid reducing HC of optimized intervals to zero
+                day.interval_offered_calls = 0  # Reset interval level data upon complete of interval
+                day.interval_calls_within_sl = 0
+                saved_day_state = copy.deepcopy(day)
+                completed_time = stamp
+
             if stamp == 86399:
                 day_completed = True
 
