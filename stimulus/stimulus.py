@@ -321,7 +321,7 @@ def simulate_day(day, service_desk, abandon_dist, skip_sleep=True, fast_mode=Tru
         )
         simulated_intervals.append(interval)
 
-        previously_active_calls = [call for call in interval.calls if call.status == 'active']
+        previously_active_calls = [call for call in interval.calls + interval.previously_active_calls if call.status == 'active']
         previously_queued_calls = [call for call in interval.calls if call.status == 'queued']
 
         if optimization_mode:
