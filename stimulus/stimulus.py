@@ -194,11 +194,11 @@ def simulate_one_step(timestamp, interval, service_desk, abandon_dist, skip_slee
     for agent in service_desk.agents[:]:
         agent = agent_logons(agent, i)
         agent = agent_logoffs(agent, i, service_desk.agents)
-        agent = update_agent_status_stats(agent, i)
+        agent = update_agent_status_stats(agent)
 
     for agent in service_desk.previously_logged_on_agents:
         agent = agent_logoffs(agent, i, service_desk.previously_logged_on_agents)
-        agent = update_agent_status_stats(agent, i)
+        agent = update_agent_status_stats(agent)
 
     for call in interval.calls:
         call = queue_calls(call, interval, i)
@@ -248,7 +248,6 @@ def optimize_interval(interval, service_desk, abandon_dist, skip_sleep=True, fas
     last_change = {'increase': False, 'change': 0}
 
     saved_interval_state = copy.deepcopy(interval)
-    saved_service_desk_state = copy.deepcopy(service_desk)
 
     while not interval.optimized:
         for i in range(0, interval.agents_count):
@@ -278,7 +277,8 @@ def optimize_interval(interval, service_desk, abandon_dist, skip_sleep=True, fas
         if not interval.optimized:
             new_hc = interval.agents_count
             interval = copy.deepcopy(saved_interval_state)
-            service_desk = copy.deepcopy(saved_service_desk_state)
+            service_desk.agents = []
+            service_desk.previously_logged_on_agents = [x.handled_by for x in interval.previously_active_calls]
             interval.agents_count = new_hc
 
     return interval
@@ -325,7 +325,7 @@ def simulate_day(day, service_desk, abandon_dist, skip_sleep=True, fast_mode=Tru
         previously_queued_calls = [call for call in interval.calls if call.status == 'queued']
 
         if optimization_mode:
-            previously_logged_on_agents = [agent for agent in service_desk.agents if agent.status == 'logged_on']
+            previously_logged_on_agents = [x.handled_by for x in previously_active_calls]
 
         print(
             'Simulated Interval: {interval}'.format(
@@ -378,7 +378,7 @@ def agent_logoffs(agent, timestamp, agents_list):
     return agent
 
 
-def update_agent_status_stats(agent, timestamp):
+def update_agent_status_stats(agent):
     if agent.last_status != agent.status or agent.previously_active != agent.active_call or agent.previously_outbound != agent.outbound_reserved:
         agent.last_status = agent.status
         agent.previously_active = agent.active_call
