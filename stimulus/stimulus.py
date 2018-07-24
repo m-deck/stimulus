@@ -196,7 +196,7 @@ def simulate_one_step(timestamp, interval, service_desk, abandon_dist, skip_slee
         agent = agent_logoffs(agent, i, service_desk.agents)
         agent = update_agent_status_stats(agent)
 
-    for agent in service_desk.previously_logged_on_agents:
+    for agent in service_desk.previously_logged_on_agents[:]:
         agent = agent_logoffs(agent, i, service_desk.previously_logged_on_agents)
         agent = update_agent_status_stats(agent)
 
