@@ -1,7 +1,9 @@
 import random
 import time
+import pandas as pd
 from .utils import secs_to_time
 from pprint import pprint
+import copy
 
 
 class Queue(object):
@@ -33,6 +35,16 @@ class SearchQueue(Queue):
         super(SearchQueue, self).__init__()
 
 
+class ServiceDesk(object):
+    _ID = 0
+
+    def __init__(self, agents):
+        self.id = self._ID
+        self.__class__._ID += 1
+        self.agents = agents
+        self.previously_logged_on_agents = []
+
+
 class Site(object):
     _ID = 0
 
@@ -58,7 +70,8 @@ class Schedule(object):
 
 class Agent(object):
     _ID = 0
-    def __init__(self, schedule): # maybe schedule shouldn't be required for agent to simply exist...
+
+    def __init__(self, schedule):  # maybe schedule shouldn't be required for agent to simply exist...
         self.id = self._ID; self.__class__._ID += 1
         self.schedule = schedule
         self.status = 'logged_off'
@@ -81,8 +94,10 @@ class Agent(object):
         self.outbound_reserved = False
         self.previously_outbound = False
 
+
 class AgentSchedule(object):
     _ID = 0
+
     def __init__(self, regular_start=28800, regular_end=(3600*16.5), regular_lunch=(3600*12), lunch_duration=1800, tz='America/Chicago', work_days=[1,2,3,4,5]):
         self.id = self._ID; self.__class__._ID += 1
         self.regular_start = regular_start
@@ -93,99 +108,61 @@ class AgentSchedule(object):
         self.work_days = work_days
         self.site = None
 
-class Day(object):
+
+class Interval(object):
     _ID = 0
-    def __init__(self, agents, calls, outbound_list=[], outbound_reservation=0.0, dials_per_reservation=0.0, reservation_length=0.0):
-        self.id = self._ID; self.__class__._ID += 1
-        self.agents = agents
+
+    def __init__(self, stamp, calls):
+        self.id = self._ID
+        self.__class__._ID += 1
+        self.stamp = stamp
         self.calls = calls
-        self.outbound_list = outbound_list
-        self.outbound_reservation = outbound_reservation
-        self.dials_per_reservation = dials_per_reservation
-        self.reservation_length = reservation_length
-        self.INITIAL_OUTBOUND_LIST_COUNT = len(outbound_list)
         self.sl_threshold = 20
         self.sl_target = 0.90
-        self.interval = 15 * 60 # 15 minutes
+        self.interval = 15 * 60  # 15 minutes
 
-        self.sl_interval_dict = {}
+        self.calls_offered = 0
+        self.calls_answered = 0
+        self.calls_handled = 0
+        self.total_calls_aband = 0
+        self.sum_handle_time = 0
 
-        earliest_arrival = 99999
+        self.service_level_calls = 0
+        self.service_level_calls_offered = 0
+        self.service_level_aband = 0
 
-        for call in self.calls:
-            if call.arrival_timestamp < earliest_arrival:
-                earliest_arrival = call.arrival_timestamp
+        self.optimized = False
+        self.agents_count = 50  # Agents count to start search from
 
-        self.earliest_arrival = earliest_arrival
-
-    def agents_currently_available(self):
-        return sum(agent.status=='logged_on' and agent.active_call==False and agent.outbound_reserved==False for agent in self.agents)
-
-    def agents_currently_logged_on(self):
-        return sum(agent.status=='logged_on' for agent in self.agents)
-
-    def percent_agents_available(self):
-        try:
-            return self.agents_currently_available() / self.agents_currently_logged_on()
-        except ZeroDivisionError:
-            return 0.0
-
-    def offered_calls(self):
-        return sum(call.status!='pre-call' for call in self.calls)
-
-    def completed_calls(self):
-        return sum(call.status=='completed' for call in self.calls)
-
-    def dials_made(self):
-        return self.INITIAL_OUTBOUND_LIST_COUNT - len(self.outbound_list)
-
-    def dials_remaining(self):
-        return len(self.outbound_list)
-
-    def active_calls(self):
-        return sum(call.status=='active' for call in self.calls)
-
-    def queued_calls(self):
-        return sum(call.status=='queued' for call in self.calls)
-
-    def abandoned_calls(self):
-        return sum(call.status=='abandoned' for call in self.calls)
-
-    def calls_within_sl(self):
-        return sum(call.met_sl for call in self.calls)
+        self.previously_active_calls = []
 
     def service_level(self):
         try:
-            return 1.0 * self.calls_within_sl() / self.offered_calls()
+            return 1.0 * self.service_level_calls / (self.service_level_calls_offered - self.service_level_aband)
         except ZeroDivisionError:
             return 1.0
 
     def print_status_line(self):
-        return (' offered: ' + str(self.offered_calls()) + ' queued: ' + str(self.queued_calls()) + ' active: ' + str(self.active_calls()) +
-                ' completed: ' + str(self.completed_calls()) + ' abandoned: ' + str(self.abandoned_calls()) +
-                ' SL: ' + "{0:.2f}%".format(100*self.service_level()) +
-                ' aht: ' + str(self.aht()) +
-                ' dials: ' + str(self.dials_made()) +
-                ' dials left: ' + str(self.dials_remaining())
-               )
+        return (' SL: {0:.2f}'.format(100*self.service_level()))
 
-    def list_of_completed_calls(self):
-        return [call for call in self.calls if call.status=='completed']
 
-    def aht(self):
-        try:
-            return sum([call.duration for call in self.list_of_completed_calls()]) / len(self.list_of_completed_calls())
-        except ZeroDivisionError:
-            return '--'
+class Day(object):
+    _ID = 0
 
-    def reset(self):
-        for call in self.calls:
-            call.reset()
-        for agent in self.agents:
-            agent.reset()
+    def __init__(self, arrival_rates, handle_times):
+        self.id = self._ID
+        self.__class__._ID += 1
+        self.intervals = [
+            Interval(
+                stamp=stamp,
+                calls=get_calls(stamp, arrival_rate, handle_times)
+            ) for arrival_rate, stamp in zip(arrival_rates, [x for x in range(3600*24) if x % 900 == 0])
+        ]
+
 
 class Call(object):
     _ID = 0
+
     def __init__(self, arrival_timestamp, duration, direction='in'):
         self.id = self._ID; self.__class__._ID += 1
         self.arrival_timestamp = arrival_timestamp
@@ -196,8 +173,8 @@ class Call(object):
         self.abandoned_at = None
         self.queue_elapsed = None
         self.handled_by = None
-        self.met_sl = False
         self.queue = None
+        self.sl_threshold_expired = False
 
     def reset(self):
         self.status = 'pre-call'
@@ -205,32 +182,40 @@ class Call(object):
         self.answered_at = None
         self.queue_elapsed = None
         self.handled_by = None
-        self.met_sl = False
+        self.sl_threshold_expired = False
 
-def simulate_one_step(timestamp, day, abandon_dist, skip_sleep=True, fast_mode=True, verbose_mode=False):
+
+def simulate_one_step(timestamp, interval, service_desk, abandon_dist, skip_sleep=True, fast_mode=True, verbose_mode=False):
     i = timestamp
-    day.agents = agent_logons(day.agents, i)
-    day.agents = agent_logoffs(day.agents, i)
-    day.calls = queue_calls(day.calls, i)
-    day = answer_calls(day, i)
-    day = hangup_calls(day, i)
-    day.calls = update_queued_call_stats(day.calls, i)
-    day = abandon_calls(day, i, abandon_dist)
-    day = reserve_outbound(day, i)
-    day = cancel_reservation(day, i)
-    day.agents = update_agent_status_stats(day.agents, i)
 
     c = 0
     pc = 0
 
-    for call in day.calls:
+    for agent in service_desk.agents[:]:
+        agent = agent_logons(agent, i)
+        agent = agent_logoffs(agent, i, service_desk.agents)
+        agent = update_agent_status_stats(agent)
+
+    for agent in service_desk.previously_logged_on_agents[:]:
+        agent = agent_logoffs(agent, i, service_desk.previously_logged_on_agents)
+        agent = update_agent_status_stats(agent)
+
+    for call in interval.calls:
+        call = queue_calls(call, interval, i)
+        call = answer_calls(call, interval, service_desk, i)
+        call = hangup_calls(call, interval, i)
+        call = update_queued_call_stats(call, interval, i)
+        call = abandon_calls(call, interval, i, abandon_dist)
         if call.status == 'completed':
             c += 1
         elif call.status == 'pre-call':
             pc += 1
+
+    for call in interval.previously_active_calls:
+        call = hangup_calls(call, interval, i)
     
-    if pc == len(day.calls) or c == len(day.calls):
-        fast_mode = True # enters fast mode when all calls are pre-call or done
+    if pc == len(interval.calls) or c == len(interval.calls):
+        fast_mode = True  # enters fast mode when all calls are pre-call or done
 
     if not skip_sleep:
         if fast_mode:
@@ -239,185 +224,288 @@ def simulate_one_step(timestamp, day, abandon_dist, skip_sleep=True, fast_mode=T
             time.sleep(0.05)
     
     if verbose_mode:
-        print(secs_to_time(i) + day.print_status_line())
+        print(secs_to_time(i) + interval.print_status_line())
+
+    return interval
+
+
+def simulate_interval(interval, service_desk, abandon_dist, skip_sleep=True, fast_mode=True, verbose_mode=False):
+    for stamp in range(interval.stamp, interval.stamp + 900):
+        interval = simulate_one_step(
+            timestamp=stamp,
+            interval=interval,
+            service_desk=service_desk,
+            abandon_dist=abandon_dist,
+            skip_sleep=skip_sleep,
+            fast_mode=fast_mode,
+            verbose_mode=verbose_mode,
+        )
+    return interval
+
+
+def optimize_interval(interval, service_desk, abandon_dist, skip_sleep=True, fast_mode=True, verbose_mode=False):
+    hc_ranges = {'lower': 0, 'upper': 100}
+    last_change = {'increase': False, 'change': 0}
+
+    saved_interval_state = copy.deepcopy(interval)
+
+    while not interval.optimized:
+        for i in range(0, interval.agents_count):
+            service_desk.agents.append(Agent(AgentSchedule(
+                regular_start=interval.stamp,
+                regular_end=interval.stamp + 899,
+                regular_lunch=3600 * 24,
+            )))
+
+        for stamp in range(interval.stamp, interval.stamp + 900):
+            interval = simulate_one_step(
+                timestamp=stamp,
+                interval=interval,
+                service_desk=service_desk,
+                abandon_dist=abandon_dist,
+                skip_sleep=skip_sleep,
+                fast_mode=fast_mode,
+                verbose_mode=verbose_mode,
+            )
+
+        interval.optimized = review_and_adjust_hc(
+            interval=interval,
+            hc_ranges=hc_ranges,
+            last_change=last_change,
+        )
+
+        if not interval.optimized:
+            new_hc = interval.agents_count
+            interval = copy.deepcopy(saved_interval_state)
+            service_desk.agents = []
+            service_desk.previously_logged_on_agents = [x.handled_by for x in interval.previously_active_calls]
+            interval.agents_count = new_hc
+
+    return interval
+
+
+def simulate_day(day, service_desk, abandon_dist, skip_sleep=True, fast_mode=True, verbose_mode=False, optimization_mode=False):
+    simulated_intervals = []
+
+    previously_active_calls = []
+    previously_queued_calls = []
+
+    if optimization_mode:
+        previously_logged_on_agents = []
+
+    for interval in day.intervals:
+
+        if optimization_mode:
+            service_desk.agents = []
+            if previously_logged_on_agents:
+                service_desk.previously_logged_on_agents = previously_logged_on_agents
+
+        if previously_queued_calls:
+            interval.calls = previously_queued_calls + interval.calls
+
+        if previously_active_calls:
+            interval.previously_active_calls = previously_active_calls
+
+        if optimization_mode:
+            simulate = optimize_interval
+        else:
+            simulate = simulate_interval
+
+        interval = simulate(
+            interval=interval,
+            service_desk=service_desk,
+            abandon_dist=abandon_dist,
+            skip_sleep=skip_sleep,
+            fast_mode=fast_mode,
+            verbose_mode=verbose_mode,
+        )
+        simulated_intervals.append(interval)
+
+        previously_active_calls = [call for call in interval.calls + interval.previously_active_calls if call.status == 'active']
+        previously_queued_calls = [call for call in interval.calls if call.status == 'queued']
+
+        if optimization_mode:
+            previously_logged_on_agents = [x.handled_by for x in previously_active_calls]
+
+        print(
+            'Simulated Interval: {interval}'.format(
+                interval=pd.to_datetime(secs_to_time(interval.stamp)).time()
+            )
+        )
+
+    day.intervals = simulated_intervals
 
     return day
 
-def simulate_day(day, abandon_dist, skip_sleep=True, fast_mode=True, verbose_mode=False):
-    for i in range(3600*24):
-        day = simulate_one_step(timestamp=i, day=day, abandon_dist=abandon_dist, skip_sleep=skip_sleep, fast_mode=fast_mode, verbose_mode=verbose_mode)
-    return day
 
-def simulate_days(day_list, abandon_dist, skip_sleep=True, fast_mode=True, verbose_mode=False):
+def simulate_days(day_list, service_desk, abandon_dist, skip_sleep=True, fast_mode=True, verbose_mode=False):
     for day in day_list:
-        day = simulate_day(day, abandon_dist, skip_sleep, fast_mode, verbose_mode)
+        day = simulate_day(day, service_desk, abandon_dist, skip_sleep, fast_mode, verbose_mode)
     return day_list
 
-def simulate_days_alt(projected_volume_df, vol_dim, day_of_week_dist, day_start_time, handles_base,
+
+def simulate_days_alt(projected_volume_df, vol_dim, day_of_week_dist, handles_base,
                       agent_list, abandon_dist, outbound_list=[], outbound_reservation=0.0,
                       dials_per_reservation=0.0, reservation_length=0,
                       skip_sleep=True, fast_mode=True, verbose_mode=False):
-    
+
+    service_desk = ServiceDesk(agents=agent_list)
+
     simulated_days = []
-    
+
     for i, day in projected_volume_df.iterrows():
         count_calls = day[vol_dim]
         arrival_rates = count_calls * day_of_week_dist
-        arrival_times = []
+        day_object = Day(arrival_rates=arrival_rates, handle_times=handles_base)
 
-        start_time = day_start_time
-
-        for x in arrival_rates:
-            for xx in range(start_time, start_time + 900):
-                threshold = x / 900
-                if random.random() < threshold:
-                    arrival_times.append(xx)
-            start_time += 900
-
-        calls_list = []
-        actual_num_calls = len(arrival_times)
-        call_durations = handles_base.sample(actual_num_calls)
-
-        for arr, dur in zip(arrival_times, call_durations):
-            calls_list.append(Call(arr,dur))
-
-        day_object = Day(agent_list, calls_list, outbound_list=outbound_list, 
-                         outbound_reservation=outbound_reservation,
-                         dials_per_reservation=dials_per_reservation,
-                         reservation_length=reservation_length)
-
-        simulated_day = simulate_day(day_object, abandon_dist)
+        simulated_day = simulate_day(day_object, service_desk, abandon_dist)
         simulated_days.append(simulated_day)
     
     return simulated_days
 
 
-def agent_logons(agents, timestamp):
-    for agent in agents:
-        if agent.schedule.regular_start == timestamp and agent.status == 'logged_off':
-            agent.status = 'logged_on'
-    return agents
+def agent_logons(agent, timestamp):
+    if agent.schedule.regular_start == timestamp and agent.status == 'logged_off':
+        agent.status = 'logged_on'
+    return agent
 
-def agent_logoffs(agents, timestamp):
-    for agent in agents:
-        if agent.active_call == False and agent.status == 'logged_on' and agent.schedule.regular_end <= timestamp and agent.outbound_reserved == False:
-            agent.status = 'logged_off'
-    return agents
 
-def update_agent_status_stats(agents, timestamp):
-    for agent in agents:
-        if agent.last_status != agent.status or agent.previously_active != agent.active_call or agent.previously_outbound != agent.outbound_reserved:
-            agent.last_status = agent.status
-            agent.previously_active = agent.active_call
-            agent.previously_outbound = agent.outbound_reserved
-            agent.time_in_status = 0
-        else:
-            agent.time_in_status += 1
-    return agents
+def agent_logoffs(agent, timestamp, agents_list):
+    if agent.active_call == False and agent.status == 'logged_on' and agent.schedule.regular_end <= timestamp and agent.outbound_reserved == False:
+        agent.status = 'logged_off'
+        agents_list.remove(agent)
 
-def queue_calls(calls_list, timestamp):
-    for call in calls_list:
-        if call.arrival_timestamp == timestamp:
-            call.status = 'queued'
-            call.queued_at = timestamp
-    return calls_list
+    return agent
 
-def update_queued_call_stats(calls_list, timestamp):
-    for call in calls_list:
-        if call.status == 'queued':
-            call.queue_elapsed = timestamp - call.queued_at
-    return calls_list
 
-def answer_calls(day, timestamp):
-    for call in day.calls:
-        if call.status == 'queued':
-            for agent in day.agents:
-                if agent.status == 'logged_on' and agent.active_call == False and agent.outbound_reserved == False:
-                    agent.active_call = True
-                    agent.handling_call = call.id
-                    call.handled_by = agent
-                    call.answered_at = timestamp
-                    call.queue_elapsed = timestamp - call.queued_at
-                    call.met_sl = (call.queue_elapsed <= day.sl_threshold)
-                    call.status = 'active'
-                    break
-    return day
+def update_agent_status_stats(agent):
+    if agent.last_status != agent.status or agent.previously_active != agent.active_call or agent.previously_outbound != agent.outbound_reserved:
+        agent.last_status = agent.status
+        agent.previously_active = agent.active_call
+        agent.previously_outbound = agent.outbound_reserved
+        agent.time_in_status = 0
+    else:
+        agent.time_in_status += 1
+    return agent
 
-def hangup_calls(day, timestamp):
-    for call in day.calls:
-        if call.status == 'active' and (call.duration + call.answered_at) <= timestamp:
-            call.status = 'completed'
-            call.completed_at = timestamp
-            call.handled_by.active_call = False
-            call.handled_by.handling_call = None 
-    return day
 
-def abandon_calls(day, timestamp, abandon_distribution):
-    abandon_distribution = sorted(abandon_distribution)
-    for call in day.calls:
-        if call.status == 'queued':
-            for aban_tuple in abandon_distribution:
-                if aban_tuple[0] >= call.queue_elapsed:
-                    if random.random() >= aban_tuple[1]:
-                        call.status = 'abandoned'
-                        call.abandoned_at = timestamp  
-                        break
-    return day
+def queue_calls(call, interval, timestamp):
+    if call.arrival_timestamp == timestamp:
+        call.status = 'queued'
+        call.queued_at = timestamp
+        interval.calls_offered += 1
+    return call
 
-def reserve_outbound(day, timestamp):
-    if not day.outbound_list == [] and day.percent_agents_available() < day.outbound_reservation and day.agents_currently_available() >= 2:
-        longest_available_time = 0 
-        reservation_candidate = None
-        for agent in day.agents:
+
+def update_queued_call_stats(call, interval, timestamp):
+    if call.status == 'queued':
+        call.queue_elapsed = timestamp - call.queued_at
+        if (not call.sl_threshold_expired) and (call.queue_elapsed > interval.sl_threshold):
+            call.sl_threshold_expired = True
+            interval.service_level_calls_offered += 1
+    return call
+
+
+def answer_calls(call, interval, service_desk, timestamp):
+    if call.status == 'queued':
+        for agent in service_desk.agents:
             if agent.status == 'logged_on' and agent.active_call == False and agent.outbound_reserved == False:
-                if agent.time_in_status > longest_available_time:
-                    reservation_candidate = agent
-                    longest_available_time = agent.time_in_status
-        if reservation_candidate is not None:
-            reservation_candidate.outbound_reserved = True
-    return day
+                agent.active_call = True
+                agent.handling_call = call.id
+                call.handled_by = agent
+                call.answered_at = timestamp
+                call.queue_elapsed = timestamp - call.queued_at
+                call.status = 'active'
+                interval.calls_answered += 1
+                if call.queue_elapsed <= interval.sl_threshold:
+                    interval.service_level_calls += 1
+                    interval.service_level_calls_offered += 1
+                break
+    return call
 
-def cancel_reservation(day, timestamp):
-    for agent in day.agents:
-        if agent.outbound_reserved == True:
-            if agent.time_in_status == day.reservation_length:
-                agent.outbound_reserved = False
-                # strike dials_per_reservation from front of list
-                day.outbound_list = day.outbound_list[day.dials_per_reservation:]
-    return day
+
+def hangup_calls(call, interval, timestamp):
+    if call.status == 'active' and (call.duration + call.answered_at) <= timestamp:
+        call.status = 'completed'
+        call.completed_at = timestamp
+        call.handled_by.active_call = False
+        call.handled_by.handling_call = None
+        interval.calls_handled += 1
+        interval.sum_handle_time += call.duration
+    return call
+
+
+def abandon_calls(call, interval, timestamp, abandon_distribution):
+    abandon_distribution = sorted(abandon_distribution)
+    if call.status == 'queued':
+        for aban_tuple in abandon_distribution:
+            if aban_tuple[0] >= call.queue_elapsed:
+                if random.random() >= aban_tuple[1]:
+                    call.status = 'abandoned'
+                    call.abandoned_at = timestamp
+                    interval.total_calls_aband += 1
+                    if call.queue_elapsed <= interval.sl_threshold:
+                        interval.service_level_aband += 1
+                        interval.service_level_calls_offered += 1
+                    break
+    return call
+
 
 def round_down_900(stamp):
     return stamp - (stamp % 900)
 
-def calculate_required_headcount(day, abandon_dist, agent_counts={}, skip_sleep=True, fast_mode=True, verbose_mode=False):
-    
-    first_agent_start = round_down_900(day.earliest_arrival)
 
-    day_completed = False
+def binary_search(hc, hc_range, increase=True):
+    if increase:
+        multiplier = 1  # defines the direction of change
+        hc_range['lower'] = hc  # If target is above current HC, set new lower limit
+        key = 'upper'
+    else:
+        multiplier = -1
+        hc_range['upper'] = hc  # If target is below current HC, set new upper limit
+        key = 'lower'
+    difference = abs(hc - hc_range[key])
+    change = max(0.5 * difference, 1) * multiplier  # Change cannot be less than 1 or negative, hence max
+    change = int(change)  # rounds the change number
+    hc += change
+    return hc
 
-    while not day_completed:
-        
-        day.reset()
-        
-        agent_list = []
 
-        for i in list(agent_counts.keys()):
-            for ii in range(0, int(agent_counts[i])):
-                agent_list.append(Agent(AgentSchedule(regular_start=i, regular_end=i+900, regular_lunch=3600*24)))
+def review_and_adjust_hc(interval, hc_ranges, last_change):
+    sl_below_target = interval.service_level() < interval.sl_target
+    sl_above_target = interval.service_level() > interval.sl_target
+    if sl_below_target or sl_above_target:
+        if sl_above_target and (interval.agents_count == 0):
+            pass    # If SL is above target even with no available agents, no change needed
+        else:
+            increase_hc = sl_below_target   # determines the direction of change
+            new_hc = binary_search(
+                hc=interval.agents_count,
+                hc_range=hc_ranges,
+                increase=increase_hc,
+            )
+            last_change_was_increase = last_change['increase']
+            required_drop_equals_last_increase = (interval.agents_count-new_hc == last_change['change'])
+            if last_change_was_increase and required_drop_equals_last_increase:
+                pass
+            else:
+                last_change['increase'] = increase_hc  # record direction of change
+                last_change['change'] = abs(interval.agents_count-new_hc)    # record change in HC
+                interval.agents_count = new_hc
+                return False
+    return True
 
-        day.agents = agent_list
-        
-        for stamp in range(first_agent_start,3600*24):
-            day = simulate_one_step(timestamp=stamp, day=day, abandon_dist=abandon_dist, skip_sleep=skip_sleep, fast_mode=fast_mode, verbose_mode=verbose_mode)
-            if stamp % 900 == 0:
-                if day.service_level() < day.sl_target:
-                    agent_counts[stamp-900] += 1
-                    #pprint(agent_counts)
-                    print(agent_counts[stamp-900])
-                    break
-            if stamp == 86399:
-                day_completed = True
 
-    pprint(agent_counts)
-    return agent_counts
+def get_calls(stamp, arrival_rate, handle_times):
+    arrival_threshold = float(arrival_rate) / 900
+    arrival_times = []
+    calls = []
+    for i in range(stamp, stamp + 900):
+        if random.random() < arrival_threshold:
+            arrival_times.append(i)
+    actual_num_calls = len(arrival_times)
+    call_durations = handle_times.sample(actual_num_calls, replace=True)
+    for arr, dur in zip(arrival_times, call_durations):
+        calls.append(Call(arr, dur))
 
+    return calls
